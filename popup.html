@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 240px;
+      padding: 18px 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      color: #202124;
+      background: #fff;
+      text-align: center;
+    }
+    .title {
+      font-size: 17px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 12px;
+      color: #5f6368;
+      margin-bottom: 16px;
+    }
+    .shortcut-box {
+      background: #f8f9fa;
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .shortcut-box kbd {
+      display: inline-block;
+      background: #e8eaed;
+      border: 1px solid #dadce0;
+      border-radius: 5px;
+      padding: 3px 8px;
+      font-family: monospace;
+      font-size: 13px;
+      color: #202124;
+      margin: 0 2px;
+    }
+    .hint {
+      font-size: 11px;
+      color: #9aa0a6;
+      margin-top: 8px;
+    }
+    .hint a { color: #1967d2; text-decoration: none; }
+    .footer {
+      font-size: 11px;
+      color: #9aa0a6;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">🌐 快捷翻译</div>
+  <div class="subtitle">英 → 中 · 整页对照</div>
+
+  <div class="shortcut-box">
+    快捷键<br>
+    <kbd id="shortcutKey">Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>E</kbd>
+    <div class="hint">Mac: <kbd>⌘</kbd><kbd>Shift</kbd><kbd>E</kbd></div>
+  </div>
+
+  <div class="hint" style="margin-bottom:4px;">
+    按一次翻译，再按一次还原<br>
+    <a href="#" id="shortcutsLink">自定义快捷键 →</a>
+  </div>
+
+  <div class="footer" style="margin-top:10px;">v1.0 · Lingva 翻译</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
