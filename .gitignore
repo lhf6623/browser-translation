@@ -3,4 +3,5 @@ node_modules/
 *.py
 
 .reasonix
-manifest.json
+manifest.json.workbuddy
+.pi
