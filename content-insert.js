@@ -10,7 +10,7 @@ function insert(orig, text) {
     el.className = 'qt-trans qt-skip';
     el.setAttribute('data-qt-trans', '1');
     el.textContent = text;
-    orig.appendChild(el);
+    orig.parentNode.insertBefore(el, orig.nextSibling);
     translatedEls.push(el);
   } catch { /* */ }
 }

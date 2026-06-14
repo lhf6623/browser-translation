@@ -102,6 +102,10 @@ translatePage() → findBlocks() → doBlocks()
 | `storage` | 翻译缓存 + 调试开关状态 + 清除缓存 |
 | `host_permissions` | 翻译 API + CORS 代理 |
 
+## 已知坑
+
+- **腾讯云 TC3 签名**：canonical headers 和 signed headers 之间需要**两个** `\n`（`canonicalHeaders` 末尾自带一个，模板里再拼一个），否则 `AuthFailure.SignatureFailure`。
+
 ## 功能
 
 - **调试面板**：popup 开关控制，点击标题栏右侧 `—`/`+` 收缩展开

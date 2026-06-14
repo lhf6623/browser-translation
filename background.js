@@ -91,7 +91,7 @@ async function doTencent(text, secretId, secretKey, signal) {
   const payload = JSON.stringify({ SourceText: text, Source: 'en', Target: 'zh', ProjectId: 0 });
   const hp = await hex256(payload);
   const ch = `content-type:application/json\nhost:${host}\n`;
-  const cr = `POST\n/\n\n${ch}content-type;host\n${hp}`;
+  const cr = `POST\n/\n\n${ch}\ncontent-type;host\n${hp}`;
   const hr = await hex256(cr);
   const cs = `${date}/${service}/tc3_request`;
   const sts = `TC3-HMAC-SHA256\n${timestamp}\n${cs}\n${hr}`;

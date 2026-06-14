@@ -1,8 +1,9 @@
 /* ========== 快捷翻译 ========== */
 
 .qt-trans {
+  display: inline;
   opacity: 0.75;
-  margin-left: 12px;
+  margin-left: 8px;
 }
 
 .qt-loader {
