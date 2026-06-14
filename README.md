@@ -4,15 +4,17 @@
 
 ## 安装
 
-**克隆后先选浏览器**：
+**克隆后先选浏览器**（生成 `manifest.json`）：
 
 ```bash
-# Chrome
+# Chrome  → 使用 service_worker
 bash scripts/switch-chrome.sh
 
-# Firefox
+# Firefox → 使用 background.scripts
 bash scripts/switch-firefox.sh
 ```
+
+> `manifest.json` 在 `.gitignore` 中，由切换脚本从 `manifest-chrome.json` 或 `manifest-firefox.json` 生成。
 
 **Chrome**：
 1. 打开 `chrome://extensions`，开启「开发者模式」
