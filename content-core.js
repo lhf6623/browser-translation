@@ -15,7 +15,7 @@ const memCache = new Map();
 
 // 配置
 const DELAY_MS = 200;
-const MAX_TEXT_LEN = 800;
+const MAX_TEXT_LEN = 3000;
 const MIN_TEXT_LEN = 1;
 const VIEWPORT_MARGIN = 300;
 const API_TIMEOUT_MS = 8000;

@@ -17,25 +17,27 @@ bash scripts/switch-firefox.sh
 > `manifest.json` 在 `.gitignore` 中，由切换脚本从 `manifest-chrome.json` 或 `manifest-firefox.json` 生成。
 
 **Chrome**：
+
 1. 打开 `chrome://extensions`，开启「开发者模式」
 2. 点击「加载已解压的扩展程序」，选择本项目文件夹
 
 **Firefox**：
+
 1. 打开 `about:debugging` → 「此 Firefox」→「临时加载附加组件」
 2. 选择 `manifest.json`
 
 ## 使用
 
-| 操作 | 效果 |
+|操作|效果|
 |------|------|
-| `Ctrl+Shift+E` | 翻译整页 |
-| 再按一次 | 还原，移除所有译文 |
-| 同域名下翻页 | 自动续翻（sessionStorage） |
-| 关闭标签 / 浏览器 | 自动清除翻译状态 |
+|`Ctrl+Shift+E`|翻译整页|
+|再按一次|还原，移除所有译文|
+|同域名下翻页|自动续翻（sessionStorage）|
+|关闭标签 / 浏览器|自动清除翻译状态|
 
 ## 文件结构
 
-```
+```md
 ├── manifest.json          MV3 配置
 ├── background.js          Service Worker：快捷键 + CORS 代理（BD/YD/TX）
 ├── config.js              API 密钥
@@ -60,7 +62,7 @@ bash scripts/switch-firefox.sh
 
 ### 加载顺序
 
-```
+```md
 content-core → config → content-debug
   → engine-mm → engine-gt → engine-bd → engine-yd → engine-tx
   → content-translate → content-scanner → content-insert → content
@@ -68,7 +70,7 @@ content-core → config → content-debug
 
 ## 架构
 
-```
+```md
 快捷键 / 域名续翻
   │
   ▼
@@ -95,6 +97,7 @@ translatePage() → findBlocks() → doBlocks()
 - 限速检测：MM 429、GT 403/429、BD 54003、YD 411、TX LimitExceeded
 - 翻译失败 → 塞回队尾换引擎；视口外 → 跳过不标记，下次重扫
 - 译文 == 原文 → 照样插入，给用户反馈
+- 超长文本（>3000 字符）→ 按句子拆分，同引擎逐个翻译再拼接
 
 ## 状态管理
 
@@ -103,9 +106,9 @@ translatePage() → findBlocks() → doBlocks()
 ## 配置
 
 | 参数 | 值 | 说明 |
-|------|-----|------|
+| ---- | ----- | ------ |
 | `DELAY_MS` | 200 | 引擎请求间隔 |
-| `MAX_TEXT_LEN` | 800 | 单次翻译文本上限 |
+| `MAX_TEXT_LEN` | 3000 | 单次翻译上限，超长按句子拆分 |
 | `MIN_TEXT_LEN` | 1 | 文本块最小字符 |
 | `VIEWPORT_MARGIN` | 300 | 视口扩展边距 |
 | `API_TIMEOUT_MS` | 8000 | API 超时 |
@@ -113,7 +116,7 @@ translatePage() → findBlocks() → doBlocks()
 ## 权限
 
 | 权限 | 用途 |
-|------|------|
+| ------ | ------ |
 | `activeTab` | 当前标签注入 |
 | `scripting` | 动态注入 |
 | `storage` | 翻译缓存 + 调试开关状态 + 清除缓存 |

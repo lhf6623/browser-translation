@@ -104,7 +104,7 @@ async function doBlocks(blocks) {
     if (!inView(el)) { eng.busy = false; continue; }
 
     try {
-      let text = (el.textContent || '').trim().slice(0, MAX_TEXT_LEN);
+      let text = (el.textContent || '').trim();
       if (!text) { el.setAttribute('data-qt', '1'); eng.busy = false; continue; }
 
       const firstAlpha = text.search(/[a-zA-Z]/);
@@ -121,7 +121,21 @@ async function doBlocks(blocks) {
       loader.className = 'qt-loader qt-skip';
       el.appendChild(loader);
 
-      const result = await translateText(core, eng);
+      let result;
+      if (core.length > MAX_TEXT_LEN) {
+        const sentences = core.match(/[^.!?\n]+[.!?\n]*/g) || [core];
+        const parts = [];
+        for (const s of sentences) {
+          const tr = await translateText(s.trim(), eng);
+          if (!tr) break;
+          parts.push(tr);
+        }
+        if (parts.length === sentences.length) {
+          result = parts.join(' ');
+        }
+      } else {
+        result = await translateText(core, eng);
+      }
       loader.remove();
       eng.busy = false;
       eng.lastCall = Date.now();
