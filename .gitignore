@@ -6,6 +6,8 @@ node_modules/
 .output/
 dist/
 .pnpm-store/
+package-lock.json
+pnpm-workspace.yaml
 
 .env
 .DS_Store
