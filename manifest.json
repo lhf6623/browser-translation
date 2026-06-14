@@ -8,11 +8,14 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "storage"],
   "host_permissions": [
     "https://clients5.google.com/*",
     "https://api.mymemory.translated.net/*",
-    "https://translate.googleapis.com/*"
+    "https://translate.googleapis.com/*",
+    "https://fanyi-api.baidu.com/*",
+    "https://openapi.youdao.com/*",
+    "https://tmt.tencentcloudapi.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -20,7 +23,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["content-core.js", "config.js", "content-debug.js", "engine-mm.js", "engine-gt.js", "engine-bd.js", "engine-yd.js", "engine-tx.js", "content-translate.js", "content-scanner.js", "content-insert.js", "content.js"],
       "css": ["styles.css"]
     }
   ],
@@ -34,7 +37,7 @@
         "default": "Ctrl+Shift+E",
         "mac": "MacCtrl+Shift+E"
       },
-      "description": "翻译选中的文字"
+      "description": "翻译整页为双语对照"
     }
   }
 }

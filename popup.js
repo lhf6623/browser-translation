@@ -10,9 +10,20 @@ document.getElementById('shortcutsLink').addEventListener('click', (e) => {
     const commands = await chrome.commands.getAll();
     const cmd = commands.find(c => c.name === 'translate');
     if (cmd && cmd.shortcut) {
-      const keys = cmd.shortcut.split('+');
       const el = document.getElementById('shortcutKey');
-      el.innerHTML = keys.map(k => `<kbd>${k}</kbd>`).join(' + ');
+      const isMac = navigator.platform.includes('Mac');
+      const keys = isMac ? [...cmd.shortcut] : cmd.shortcut.split('+').map(k => k.trim());
+      el.innerHTML = keys.map(k => `<kbd>${k}</kbd>`).join(' <span>+</span> ');
     }
   } catch { /* ignore */ }
+})();
+
+// 调试面板开关
+(async () => {
+  const toggle = document.getElementById('debugToggle');
+  const { debugEnabled } = await chrome.storage.local.get('debugEnabled');
+  toggle.checked = !!debugEnabled;
+  toggle.addEventListener('change', () => {
+    chrome.storage.local.set({ debugEnabled: toggle.checked });
+  });
 })();
