@@ -1,7 +1,8 @@
 node_modules/
+.reasonix/
+.workbuddy/
+.pi/
+
+manifest.json
 .DS_Store
 *.py
-
-.reasonix
-manifest.json.workbuddy
-.pi
