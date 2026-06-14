@@ -39,6 +39,14 @@ const DBG = {
 let dbgPanel = null;
 let dbgCount = null;
 let dbgList = null;
+let dbgCollapsed = false;
+
+function dbgToggle() {
+  dbgCollapsed = !dbgCollapsed;
+  const body = dbgPanel.querySelector('.qt-dbg-body');
+  body.style.display = dbgCollapsed ? 'none' : '';
+  dbgPanel.querySelector('.qt-dbg-toggle').textContent = dbgCollapsed ? '+' : '—';
+}
 
 function dbgInit() {
   if (dbgPanel || !dbgEnabled) return;
@@ -55,8 +63,10 @@ function dbgInit() {
         box-shadow: 0 4px 20px rgba(0,0,0,0.5); opacity: 0.92;
         pointer-events: auto; user-select: none;
       }
-      #qt-debug-panel .qt-dbg-title { color: #64ffda; font-weight: 700; margin-bottom: 4px; font-size: 12px; }
-      #qt-debug-panel .qt-dbg-stats { margin-bottom: 4px; color: #b0b0b0; }
+      #qt-debug-panel .qt-dbg-title { color: #64ffda; font-weight: 700; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+      #qt-debug-panel .qt-dbg-toggle { color: #64ffda; font-size: 14px; line-height: 1; opacity: 0.5; transition: opacity 0.2s; }
+      #qt-debug-panel .qt-dbg-title:hover .qt-dbg-toggle { opacity: 1; }
+      #qt-debug-panel .qt-dbg-stats { margin-top: 4px; margin-bottom: 4px; color: #b0b0b0; }
       #qt-debug-panel .qt-dbg-stats span { margin-right: 10px; white-space: nowrap; }
       #qt-debug-panel .qt-dbg-stats .ok { color: #69f0ae; }
       #qt-debug-panel .qt-dbg-stats .warn { color: #ffab40; }
@@ -70,11 +80,14 @@ function dbgInit() {
       #qt-debug-panel .qt-dbg-log .line.err { color: #ff5252; }
       #qt-debug-panel .qt-dbg-log .line.cache { color: #82b1ff; }
     </style>
-    <div class="qt-dbg-title">🔍 快捷翻译 Debug</div>
-    <div class="qt-dbg-stats" id="qt-dbg-stats"></div>
-    <div class="qt-dbg-log" id="qt-dbg-log"></div>
+    <div class="qt-dbg-title"><span>快捷翻译 Debug</span><span class="qt-dbg-toggle">—</span></div>
+    <div class="qt-dbg-body">
+      <div class="qt-dbg-stats" id="qt-dbg-stats"></div>
+      <div class="qt-dbg-log" id="qt-dbg-log"></div>
+    </div>
   `;
   document.body.appendChild(dbgPanel);
+  dbgPanel.querySelector('.qt-dbg-title').addEventListener('click', dbgToggle);
   dbgCount = dbgPanel.querySelector('#qt-dbg-stats');
   dbgList = dbgPanel.querySelector('#qt-dbg-log');
   dbgRender();

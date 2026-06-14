@@ -44,6 +44,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     toggle();
     sendResponse({ ok: true });
   }
+  if (msg.action === 'clearCache') {
+    memCache.clear();
+    sendResponse({ ok: true });
+  }
 });
 
 async function toggle() {
@@ -119,10 +123,8 @@ async function doBlocks(blocks) {
 
       if (cancelled) return;
 
-      if (result && result !== core) {
+      if (result) {
         insert(el, prefix + result + suffix);
-      } else if (result === core) {
-        el.setAttribute('data-qt', '1');
       } else {
         queue.push(el);
       }
