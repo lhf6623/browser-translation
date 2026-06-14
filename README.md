@@ -24,10 +24,10 @@
 ├── config.js              API 密钥
 │
 ├── content-core.js        常量 · 状态(S/cancelled/translatedEls) · 引擎池 · pickEngine
-├── content-debug.js       调试面板（popup 开关控制显隐）
+├── content-debug.js       调试面板（popup 开关，点击收缩/展开）
 ├── content-translate.js   调度核心：translateText · hashKey · cleanHtml
-├── content-scanner.js     文本块扫描：findBlocks · visible · inView
-├── content-insert.js      译文插入与移除
+├── content-scanner.js     文本块扫描：findBlocks · visible · inView（扫描 document.body）
+├── content-insert.js      译文插入与移除（含 removeAll 清 loader/属性）
 ├── content.js             主逻辑：事件 · toggle · doBlocks · scanAndTranslate
 │
 ├── engine-mm.js           MyMemory（无 Key）
@@ -77,7 +77,7 @@ translatePage() → findBlocks() → doBlocks()
 - 引擎状态：`busy` / `lastCall` / `rateLimitUntil`（限速冷却 60s）
 - 限速检测：MM 429、GT 403/429、BD 54003、YD 411、TX LimitExceeded
 - 翻译失败 → 塞回队尾换引擎；视口外 → 跳过不标记，下次重扫
-- 译文 == 原文 → 标记跳过不插入
+- 译文 == 原文 → 照样插入，给用户反馈
 
 ## 状态管理
 
@@ -99,5 +99,11 @@ translatePage() → findBlocks() → doBlocks()
 |------|------|
 | `activeTab` | 当前标签注入 |
 | `scripting` | 动态注入 |
-| `storage` | 翻译缓存 + 调试开关状态 |
+| `storage` | 翻译缓存 + 调试开关状态 + 清除缓存 |
 | `host_permissions` | 翻译 API + CORS 代理 |
+
+## 功能
+
+- **调试面板**：popup 开关控制，点击标题栏右侧 `—`/`+` 收缩展开
+- **清空缓存**：popup 底部「清空缓存」一键清除内存和持久缓存
+- **视口优先**：只翻译可见区域内容，滚走即跳过，下次滚回来再翻
