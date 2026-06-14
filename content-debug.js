@@ -105,13 +105,14 @@ function dbgRender() {
     `<span class="tx">TX ${d.tencent}</span>` +
     `<span class="err">✗ ${d.fail}</span>` +
     `<span class="cache">缓存 ${d.cacheHit}</span>`;
-  dbgList.innerHTML = d.logs.map(l => {
-    const cls = l.fail ? 'err' : (l.cache ? 'cache' : 'ok');
+  dbgList.innerHTML = '';
+  d.logs.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'line ' + (l.fail ? 'err' : (l.cache ? 'cache' : 'ok'));
     const icon = l.fail ? '✗' : (l.cache ? '↻' : '✓');
-    const engine = l.engine || '';
-    const preview = l.text.length > 28 ? l.text.slice(0, 28) + '…' : l.text;
-    return `<div class="line ${cls}">${icon} ${engine} ${preview}</div>`;
-  }).join('');
+    div.textContent = `${icon} ${l.engine || ''} ${l.text.length > 28 ? l.text.slice(0, 28) + '…' : l.text}`;
+    dbgList.appendChild(div);
+  });
 }
 
 function dbgLog(engine, text, fail, cache) {

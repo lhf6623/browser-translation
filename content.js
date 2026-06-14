@@ -87,10 +87,13 @@ async function doBlocks(blocks) {
 
   while (queue.length && !cancelled) {
     let eng;
+    const waitStart = Date.now();
     while (!(eng = pickEngine())) {
       if (cancelled) return;
+      if (Date.now() - waitStart > 30000) { console.warn('[快捷翻译] 所有引擎暂不可用'); break; }
       await sleep(100);
     }
+    if (!eng) break;
     eng.busy = true;
     eng.lastCall = Date.now();
 
