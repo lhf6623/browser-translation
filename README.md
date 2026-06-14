@@ -4,8 +4,23 @@
 
 ## 安装
 
+**克隆后先选浏览器**：
+
+```bash
+# Chrome
+bash scripts/switch-chrome.sh
+
+# Firefox
+bash scripts/switch-firefox.sh
+```
+
+**Chrome**：
 1. 打开 `chrome://extensions`，开启「开发者模式」
 2. 点击「加载已解压的扩展程序」，选择本项目文件夹
+
+**Firefox**：
+1. 打开 `about:debugging` → 「此 Firefox」→「临时加载附加组件」
+2. 选择 `manifest.json`
 
 ## 使用
 

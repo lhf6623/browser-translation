@@ -2,8 +2,11 @@
 
 .qt-trans {
   display: inline;
-  opacity: 0.75;
-  margin-left: 8px;
+  opacity: 0.85;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background: rgba(128,128,128,0.08);
+  border-radius: 4px;
 }
 
 .qt-loader {

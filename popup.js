@@ -11,9 +11,12 @@ document.getElementById('shortcutsLink').addEventListener('click', (e) => {
     const cmd = commands.find(c => c.name === 'translate');
     if (cmd && cmd.shortcut) {
       const el = document.getElementById('shortcutKey');
-      const isMac = navigator.platform.includes('Mac');
-      const keys = isMac ? [...cmd.shortcut] : cmd.shortcut.split('+').map(k => k.trim());
-      el.innerHTML = keys.map(k => `<kbd>${k}</kbd>`).join(' <span>+</span> ');
+      if (cmd.shortcut.includes('+')) {
+        const keys = cmd.shortcut.split('+').map(k => k.trim());
+        el.innerHTML = keys.map(k => `<kbd>${k}</kbd>`).join(' <span>+</span> ');
+      } else {
+        el.innerHTML = [...cmd.shortcut].map(k => `<kbd>${k}</kbd>`).join(' <span>+</span> ');
+      }
     }
   } catch { /* ignore */ }
 })();
