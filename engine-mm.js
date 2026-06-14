@@ -14,9 +14,7 @@ async function tryMyMemory(text) {
 
     const data = await res.json();
     if (data.responseStatus === 200 && data.responseData?.translatedText) {
-      if (data.responseData.match >= 0.9) {
-        return { result: data.responseData.translatedText, rateLimited: false };
-      }
+      return { result: data.responseData.translatedText, rateLimited: false };
     }
     return { result: null, rateLimited: false };
   } catch {

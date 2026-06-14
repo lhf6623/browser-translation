@@ -49,7 +49,7 @@ async function tryBaiduTranslate(text) {
     const data = res.data;
     if (data.error_code === '54003') return { result: null, rateLimited: true };
     if (data.trans_result?.[0]?.dst) {
-      return { result: data.trans_result[0].dst, rateLimited: false };
+      return { result: data.trans_result.map(r => r.dst).join(''), rateLimited: false };
     }
     return { result: null, rateLimited: false };
   } catch {

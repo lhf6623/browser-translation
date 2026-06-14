@@ -20,6 +20,6 @@ function removeAll() {
   sessionStorage.removeItem('qt_auto');
   for (const e of translatedEls) { if (e.parentNode) e.parentNode.removeChild(e); }
   translatedEls = [];
-  document.querySelectorAll('[data-qt]').forEach(e => e.removeAttribute('data-qt'));
+  document.querySelectorAll('[data-qt], [data-qt-retry]').forEach(e => { e.removeAttribute('data-qt'); e.removeAttribute('data-qt-retry'); });
   document.querySelectorAll('.qt-loader').forEach(e => e.remove());
 }

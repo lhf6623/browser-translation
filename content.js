@@ -112,6 +112,8 @@ async function doBlocks(blocks) {
       const core = text.slice(firstAlpha, lastAlpha + 1);
       const suffix = text.slice(lastAlpha + 1);
 
+      const oldLoader = el.querySelector('.qt-loader');
+      if (oldLoader) oldLoader.remove();
       const loader = document.createElement('span');
       loader.className = 'qt-loader qt-skip';
       el.appendChild(loader);
@@ -126,12 +128,26 @@ async function doBlocks(blocks) {
       if (result) {
         insert(el, prefix + result + suffix);
       } else {
-        queue.push(el);
+        const tries = (el.getAttribute('data-qt-retry') | 0) + 1;
+        if (tries < 5) {
+          el.setAttribute('data-qt-retry', tries);
+          queue.push(el);
+        } else {
+          el.removeAttribute('data-qt-retry');
+          el.setAttribute('data-qt', '1');
+        }
       }
     } catch {
       eng.busy = false;
       eng.lastCall = Date.now();
-      queue.push(el);
+      const tries = (el.getAttribute('data-qt-retry') | 0) + 1;
+      if (tries < 5) {
+        el.setAttribute('data-qt-retry', tries);
+        queue.push(el);
+      } else {
+        el.removeAttribute('data-qt-retry');
+        el.setAttribute('data-qt', '1');
+      }
     }
   }
 }
