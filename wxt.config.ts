@@ -1,4 +1,5 @@
 import { defineConfig } from "wxt";
+import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   srcDir: "src",
@@ -31,8 +32,13 @@ export default defineConfig({
     },
   },
 
+  // Vue SFC 支持
+  vite: () => ({
+    plugins: [vue()],
+  }),
+
   // 不自动打开浏览器
-  runner: {
+  webExt: {
     disabled: true,
   },
 
