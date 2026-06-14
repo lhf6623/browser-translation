@@ -26,7 +26,7 @@ bash scripts/switch-firefox.sh
 
 | 操作 | 效果 |
 |------|------|
-| `Ctrl+Shift+E`（Mac: `⌘+Shift+E`） | 翻译整页 |
+| `Ctrl+Shift+E` | 翻译整页 |
 | 再按一次 | 还原，移除所有译文 |
 | 同域名下翻页 | 自动续翻（sessionStorage） |
 | 关闭标签 / 浏览器 | 自动清除翻译状态 |
