@@ -2,7 +2,11 @@ node_modules/
 .reasonix/
 .workbuddy/
 .pi/
+.wxt/
+.output/
+dist/
+.pnpm-store/
 
-manifest.json
+.env
 .DS_Store
 *.py

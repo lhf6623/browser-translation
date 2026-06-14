@@ -1,9 +1,84 @@
-// ========== 百度翻译引擎 ==========
+// ========== MD5 实现 (Joseph Myers / public domain) ==========
+// 用于百度翻译 API 签名
 
-// --- MD5 (Joseph Myers / public domain) ---
+function add32(a: number, b: number) {
+  return (a + b) & 0xffffffff;
+}
 
-function md5cycle(x, k) {
-  var a = x[0],
+function cmn(
+  q: number,
+  a: number,
+  b: number,
+  x: number,
+  s: number,
+  t: number,
+) {
+  a = add32(add32(a, q), add32(x, t));
+  return add32((a << s) | (a >>> (32 - s)), b);
+}
+
+function ff(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  x: number,
+  s: number,
+  t: number,
+) {
+  return cmn((b & c) | (~b & d), a, b, x, s, t);
+}
+
+function gg(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  x: number,
+  s: number,
+  t: number,
+) {
+  return cmn((b & d) | (c & ~d), a, b, x, s, t);
+}
+
+function hh(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  x: number,
+  s: number,
+  t: number,
+) {
+  return cmn(b ^ c ^ d, a, b, x, s, t);
+}
+
+function ii(
+  a: number,
+  b: number,
+  c: number,
+  d: number,
+  x: number,
+  s: number,
+  t: number,
+) {
+  return cmn(c ^ (b | ~d), a, b, x, s, t);
+}
+
+function md5blk(s: string): number[] {
+  const blks: number[] = [];
+  for (let i = 0; i < 64; i += 4) {
+    blks[i >> 2] =
+      s.charCodeAt(i) +
+      (s.charCodeAt(i + 1) << 8) +
+      (s.charCodeAt(i + 2) << 16) +
+      (s.charCodeAt(i + 3) << 24);
+  }
+  return blks;
+}
+
+function md5cycle(x: number[], k: number[]) {
+  let a = x[0],
     b = x[1],
     c = x[2],
     d = x[3];
@@ -76,32 +151,19 @@ function md5cycle(x, k) {
   x[2] = add32(c, x[2]);
   x[3] = add32(d, x[3]);
 }
-function cmn(q, a, b, x, s, t) {
-  a = add32(add32(a, q), add32(x, t));
-  return add32((a << s) | (a >>> (32 - s)), b);
-}
-function ff(a, b, c, d, x, s, t) {
-  return cmn((b & c) | (~b & d), a, b, x, s, t);
-}
-function gg(a, b, c, d, x, s, t) {
-  return cmn((b & d) | (c & ~d), a, b, x, s, t);
-}
-function hh(a, b, c, d, x, s, t) {
-  return cmn(b ^ c ^ d, a, b, x, s, t);
-}
-function ii(a, b, c, d, x, s, t) {
-  return cmn(c ^ (b | ~d), a, b, x, s, t);
-}
-function md51(s) {
-  var n = s.length,
-    state = [1732584193, -271733879, -1732584194, 271733878],
-    i;
-  for (i = 64; i <= s.length; i += 64)
+
+function md51(s: string): number[] {
+  const n = s.length;
+  const state = [1732584193, -271733879, -1732584194, 271733878];
+  let i: number;
+  for (i = 64; i <= s.length; i += 64) {
     md5cycle(state, md5blk(s.substring(i - 64, i)));
+  }
   s = s.substring(i - 64);
-  var tail = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-  for (i = 0; i < s.length; i++)
+  const tail = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  for (i = 0; i < s.length; i++) {
     tail[i >> 2] |= s.charCodeAt(i) << ((i % 4) << 3);
+  }
   tail[i >> 2] |= 0x80 << ((i % 4) << 3);
   if (i > 55) {
     md5cycle(state, tail);
@@ -111,57 +173,23 @@ function md51(s) {
   md5cycle(state, tail);
   return state;
 }
-function md5blk(s) {
-  var md5blks = [],
-    i;
-  for (i = 0; i < 64; i += 4)
-    md5blks[i >> 2] =
-      s.charCodeAt(i) +
-      (s.charCodeAt(i + 1) << 8) +
-      (s.charCodeAt(i + 2) << 16) +
-      (s.charCodeAt(i + 3) << 24);
-  return md5blks;
-}
-var hex_chr = "0123456789abcdef".split("");
-function rhex(n) {
-  var s = "",
-    j = 0;
-  for (; j < 4; j++)
-    s += hex_chr[(n >> (j * 8 + 4)) & 0x0f] + hex_chr[(n >> (j * 8)) & 0x0f];
+
+const hex_chr = "0123456789abcdef".split("");
+
+function rhex(n: number): string {
+  let s = "";
+  for (let j = 0; j < 4; j++) {
+    s +=
+      hex_chr[(n >> (j * 8 + 4)) & 0x0f] + hex_chr[(n >> (j * 8)) & 0x0f];
+  }
   return s;
 }
-function hex(x) {
-  for (var i = 0; i < x.length; i++) x[i] = rhex(x[i]);
-  return x.join("");
+
+function hex(x: number[]): string {
+  const parts = x.map(rhex);
+  return parts.join("");
 }
-function add32(a, b) {
-  return (a + b) & 0xffffffff;
-}
-function md5(s) {
+
+export function md5(s: string): string {
   return hex(md51(s));
-}
-
-// --- 百度翻译 ---
-
-async function tryBaiduTranslate(text) {
-  const salt = Date.now().toString();
-  const sign = md5(BD_APPID + text + salt + BD_KEY);
-  const url = `https://fanyi-api.baidu.com/api/trans/vip/translate?q=${encodeURIComponent(text)}&from=en&to=zh&appid=${BD_APPID}&salt=${salt}&sign=${sign}`;
-
-  try {
-    const res = await chrome.runtime.sendMessage({ action: "fetchBaidu", url });
-    if (!res || !res.ok) return { result: null, rateLimited: false };
-
-    const data = res.data;
-    if (data.error_code === "54003") return { result: null, rateLimited: true };
-    if (data.trans_result?.[0]?.dst) {
-      return {
-        result: data.trans_result.map((r) => r.dst).join(""),
-        rateLimited: false,
-      };
-    }
-    return { result: null, rateLimited: false };
-  } catch {
-    return { result: null, rateLimited: false };
-  }
 }

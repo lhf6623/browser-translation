@@ -1,76 +1,81 @@
-# 快捷翻译 - Chrome 扩展
+# 快捷翻译 - 浏览器扩展
 
 > 快捷键翻译整页为英→中双语对照，5 引擎智能调度。
+> 基于 **WXT + TypeScript** 工程化重构。
 
-## 安装
-
-**克隆后先选浏览器**（生成 `manifest.json`）：
+## 安装 & 开发
 
 ```bash
-# Chrome  → 使用 service_worker
-bash scripts/switch-chrome.sh
+# 安装依赖
+npm install
 
-# Firefox → 使用 background.scripts
-bash scripts/switch-firefox.sh
+# 配置 API 密钥
+cp .env.example .env
+# 编辑 .env 填入百度/有道/腾讯的 API 密钥
+
+# 开发（带 HMR）
+npm run dev
+
+# 构建
+npm run build              # Chrome MV3
+npm run build:firefox      # Firefox
 ```
 
-> `manifest.json` 在 `.gitignore` 中，由切换脚本从 `manifest-chrome.json` 或 `manifest-firefox.json` 生成。
+## 加载扩展
 
 **Chrome**：
-
-1. 打开 `chrome://extensions`，开启「开发者模式」
-2. 点击「加载已解压的扩展程序」，选择本项目文件夹
+1. `npm run build`
+2. 打开 `chrome://extensions`，开启「开发者模式」
+3. 点击「加载已解压的扩展程序」，选择 `.output/chrome-mv3` 文件夹
 
 **Firefox**：
-
-1. 打开 `about:debugging` → 「此 Firefox」→「临时加载附加组件」
-2. 选择 `manifest.json`
+1. `npm run build:firefox`
+2. 打开 `about:debugging` → 「此 Firefox」→「临时加载附加组件」
+3. 选择 `.output/firefox-mv2/manifest.json`
 
 ## 使用
 
-|操作|效果|
+| 操作 | 效果 |
 |------|------|
-|`Ctrl+Shift+E`|翻译整页|
-|再按一次|还原，移除所有译文|
-|同域名下翻页|自动续翻（sessionStorage）|
-|关闭标签 / 浏览器|自动清除翻译状态|
+| `Ctrl+Shift+E` | 翻译整页 |
+| 再按一次 | 还原，移除所有译文 |
+| 同域名下翻页 | 自动续翻（sessionStorage） |
+| 关闭标签 / 浏览器 | 自动清除翻译状态 |
 
-## 文件结构
+## 工程结构
 
-```md
-├── manifest.json          MV3 配置
-├── background.js          Service Worker：快捷键 + CORS 代理（BD/YD/TX）
-├── config.js              API 密钥
-│
-├── content-core.js        常量 · 状态(S/cancelled/translatedEls) · 引擎池 · pickEngine
-├── content-debug.js       调试面板（popup 开关，点击收缩/展开）
-├── content-translate.js   调度核心：translateText · hashKey · cleanHtml
-├── content-scanner.js     文本块扫描：findBlocks · visible · inView（扫描 document.body）
-├── content-insert.js      译文插入与移除（含 removeAll 清 loader/属性）
-├── content.js             主逻辑：事件 · toggle · doBlocks · scanAndTranslate
-│
-├── engine-mm.js           MyMemory（无 Key）
-├── engine-gt.js           Google Translate（无 Key）
-├── engine-bd.js           百度（含 MD5）
-├── engine-yd.js           有道（含 SHA-256）
-├── engine-tx.js           腾讯
-│
-├── styles.css             样式
-├── popup.html / popup.js  弹窗
-└── icons/                 图标
 ```
-
-### 加载顺序
-
-```md
-content-core → config → content-debug
-  → engine-mm → engine-gt → engine-bd → engine-yd → engine-tx
-  → content-translate → content-scanner → content-insert → content
+src/
+├── entrypoints/            # WXT 入口
+│   ├── background.ts       # Service Worker: 快捷键 + CORS 代理
+│   ├── content.ts          # Content Script 入口
+│   ├── styles.css          # 译文样式
+│   └── popup/
+│       ├── index.html      # 弹窗 UI
+│       └── main.ts         # 弹窗逻辑
+├── lib/                    # 共享模块
+│   ├── core.ts             # 常量 · 状态机 · 引擎池 · pickEngine
+│   ├── scanner.ts          # DOM 文本块扫描
+│   ├── translator.ts       # 翻译调度：translateText + doBlocks
+│   ├── insert.ts           # 译文 DOM 插入与移除
+│   ├── debug.ts            # 调试面板
+│   ├── config.ts           # API 密钥（从构建时环境变量注入）
+│   ├── hash.ts             # MD5 实现（百度签名用）
+│   └── engines/
+│       ├── types.ts        # 引擎接口定义
+│       ├── registry.ts     # 引擎注册表
+│       ├── google.ts       # Google Translate
+│       ├── baidu.ts        # 百度翻译
+│       ├── youdao.ts       # 有道翻译
+│       ├── tencent.ts      # 腾讯翻译
+│       └── mymemory.ts     # MyMemory
+└── public/
+    └── icons/              # 扩展图标
 ```
 
 ## 架构
 
-```md
+```
 快捷键 / 域名续翻
   │
   ▼
@@ -96,7 +101,6 @@ translatePage() → findBlocks() → doBlocks()
 - 引擎状态：`busy` / `lastCall` / `rateLimitUntil`（限速冷却 60s）
 - 限速检测：MM 429、GT 403/429、BD 54003、YD 411、TX LimitExceeded
 - 翻译失败 → 塞回队尾换引擎；视口外 → 跳过不标记，下次重扫
-- 译文 == 原文 → 照样插入，给用户反馈
 - 超长文本（>3000 字符）→ 按句子拆分，同引擎逐个翻译再拼接
 
 ## 状态管理
@@ -106,7 +110,7 @@ translatePage() → findBlocks() → doBlocks()
 ## 配置
 
 | 参数 | 值 | 说明 |
-| ---- | ----- | ------ |
+|------|-----|------|
 | `DELAY_MS` | 200 | 引擎请求间隔 |
 | `MAX_TEXT_LEN` | 3000 | 单次翻译上限，超长按句子拆分 |
 | `MIN_TEXT_LEN` | 1 | 文本块最小字符 |
@@ -116,18 +120,8 @@ translatePage() → findBlocks() → doBlocks()
 ## 权限
 
 | 权限 | 用途 |
-| ------ | ------ |
+|------|------|
 | `activeTab` | 当前标签注入 |
 | `scripting` | 动态注入 |
 | `storage` | 翻译缓存 + 调试开关状态 + 清除缓存 |
 | `host_permissions` | 翻译 API + CORS 代理 |
-
-## 已知坑
-
-- **腾讯云 TC3 签名**：canonical headers 和 signed headers 之间需要**两个** `\n`（`canonicalHeaders` 末尾自带一个，模板里再拼一个），否则 `AuthFailure.SignatureFailure`。
-
-## 功能
-
-- **调试面板**：popup 开关控制，点击标题栏右侧 `—`/`+` 收缩展开
-- **清空缓存**：popup 底部「清空缓存」一键清除内存和持久缓存
-- **视口优先**：只翻译可见区域内容，滚走即跳过，下次滚回来再翻

@@ -1,8 +1,12 @@
 // ========== 腾讯翻译引擎 ==========
 
-async function tryTencentTranslate(text) {
+import { browser } from "wxt/browser";
+import type { EngineResult } from "./types";
+import { TX_SECRET_ID, TX_SECRET_KEY } from "../config";
+
+export async function tryTencentTranslate(text: string): Promise<EngineResult> {
   try {
-    const res = await chrome.runtime.sendMessage({
+    const res = await browser.runtime.sendMessage({
       action: "fetchTencent",
       q: text,
       secretId: TX_SECRET_ID,

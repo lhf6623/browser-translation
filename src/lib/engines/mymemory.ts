@@ -1,6 +1,9 @@
 // ========== MyMemory 翻译引擎 ==========
 
-async function tryMyMemory(text) {
+import type { EngineResult } from "./types";
+import { API_TIMEOUT_MS } from "../core";
+
+export async function tryMyMemory(text: string): Promise<EngineResult> {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en%7Czh`;
 
   try {
