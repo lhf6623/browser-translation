@@ -9,15 +9,16 @@ async function tryGoogleTranslate(text) {
     const res = await fetch(url, { signal: ctrl.signal });
     clearTimeout(timer);
 
-    if (res.status === 403 || res.status === 429) return { result: null, rateLimited: true };
+    if (res.status === 403 || res.status === 429)
+      return { result: null, rateLimited: true };
     if (!res.ok) return { result: null, rateLimited: false };
 
     const data = await res.json();
     if (data?.[0]) {
       const segments = data[0]
-        .filter(s => s?.[0])
-        .map(s => s[0])
-        .join('');
+        .filter((s) => s?.[0])
+        .map((s) => s[0])
+        .join("");
       if (segments) return { result: segments, rateLimited: false };
     }
     return { result: null, rateLimited: false };

@@ -3,7 +3,7 @@
 async function tryTencentTranslate(text) {
   try {
     const res = await chrome.runtime.sendMessage({
-      action: 'fetchTencent',
+      action: "fetchTencent",
       q: text,
       secretId: TX_SECRET_ID,
       secretKey: TX_SECRET_KEY,
@@ -12,7 +12,10 @@ async function tryTencentTranslate(text) {
 
     const r = res.data.Response;
     if (r.Error) {
-      if (r.Error.Code === 'LimitExceeded' || r.Error.Code === 'RequestLimitExceeded') {
+      if (
+        r.Error.Code === "LimitExceeded" ||
+        r.Error.Code === "RequestLimitExceeded"
+      ) {
         return { result: null, rateLimited: true };
       }
       return { result: null, rateLimited: false };
