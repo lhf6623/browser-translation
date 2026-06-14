@@ -85,13 +85,13 @@
 
 ## 修复进度
 
-| # | 问题 | 状态 |
-|---|------|------|
-| 1 | 死循环 | ⬜ 待修 |
-| 2 | cancelled 竞态 | ⬜ 待修 |
-| 3 | 百度多段结果 | ⬜ 待修 |
-| 4 | MyMemory 阈值 | ⬜ 待修 |
-| 5 | 缓存 TTL | ⬜ 待修 |
-| 6 | pickEngine 超时 | ⬜ 待修 |
-| 7 | XSS | ⬜ 待修 |
-| 8 | 引擎饥饿 | ⬜ 待修 |
+| # | 问题 | 状态 | 判断 |
+|---|------|------|------|
+| 1 | 死循环 | ✅ 已修 | `data-qt-retry` 计数器，上限 5 次后标记完成 |
+| 2 | cancelled 竞态 | ❌ 不修 | `toggle()` 先设 `cancelled=true`，`doBlocks` 内 while 每轮检查，旧 worker 正常退出。概率极低 |
+| 3 | 百度多段结果 | ✅ 已修 | `map(r => r.dst).join('')` 拼接所有段 |
+| 4 | MyMemory 阈值 | ✅ 已修 | 去掉 `match >= 0.9`，有 `translatedText` 就返回 |
+| 5 | 缓存 TTL | ❌ 不修 | 自用短期不超 10MB，popup 有清空缓存按钮 |
+| 6 | pickEngine 超时 | ✅ 已修 | 30 秒超时后 `break` 退出 |
+| 7 | XSS | ✅ 已修 | `createElement` + `textContent` 替代 `innerHTML` |
+| 8 | 引擎饥饿 | ❌ 不修 | `_pickIdx` 轮转每轮从上次位置继续，不会饥饿 |
