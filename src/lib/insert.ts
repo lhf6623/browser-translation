@@ -14,7 +14,8 @@ export function insert(orig: HTMLElement, text: string): void {
     el.setAttribute("data-qt-trans", "1");
     el.textContent = text;
     if (INSERT_AFTER_TAGS.has(orig.tagName)) {
-      orig.parentNode!.insertBefore(el, orig.nextSibling);
+      if (!orig.parentNode) return;
+      orig.parentNode.insertBefore(el, orig.nextSibling);
     } else {
       orig.appendChild(el);
     }
