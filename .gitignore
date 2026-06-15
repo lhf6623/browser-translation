@@ -6,6 +6,8 @@ node_modules/
 .output/
 dist/
 .pnpm-store/
+.codegraph/
+
 package-lock.json
 pnpm-workspace.yaml
 

@@ -48,7 +48,7 @@ const collapsed = ref(false);
   font: 11px/1.5 "SF Mono", "Fira Code", "JetBrains Mono", monospace;
   border-radius: 10px;
   padding: 12px 14px;
-  width: 370px;
+  width: 390px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
   pointer-events: auto;
   user-select: none;
