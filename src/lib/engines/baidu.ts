@@ -4,6 +4,7 @@ import { browser } from "wxt/browser";
 import type { EngineResult } from "./types";
 import { md5 } from "../hash";
 import { BD_APPID, BD_KEY } from "../config";
+import { API_TIMEOUT_MS, withTimeout } from "../core";
 
 export async function tryBaiduTranslate(text: string): Promise<EngineResult> {
   const salt = Date.now().toString();
@@ -14,7 +15,10 @@ export async function tryBaiduTranslate(text: string): Promise<EngineResult> {
     `&appid=${BD_APPID}&salt=${salt}&sign=${sign}`;
 
   try {
-    const res = await browser.runtime.sendMessage({ action: "fetchBaidu", url });
+    const res = await withTimeout(
+      browser.runtime.sendMessage({ action: "fetchBaidu", url }),
+      API_TIMEOUT_MS,
+    );
     if (!res || !res.ok) return { result: null, rateLimited: false };
 
     const data = res.data;

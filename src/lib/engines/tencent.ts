@@ -3,15 +3,19 @@
 import { browser } from "wxt/browser";
 import type { EngineResult } from "./types";
 import { TX_SECRET_ID, TX_SECRET_KEY } from "../config";
+import { API_TIMEOUT_MS, withTimeout } from "../core";
 
 export async function tryTencentTranslate(text: string): Promise<EngineResult> {
   try {
-    const res = await browser.runtime.sendMessage({
-      action: "fetchTencent",
-      q: text,
-      secretId: TX_SECRET_ID,
-      secretKey: TX_SECRET_KEY,
-    });
+    const res = await withTimeout(
+      browser.runtime.sendMessage({
+        action: "fetchTencent",
+        q: text,
+        secretId: TX_SECRET_ID,
+        secretKey: TX_SECRET_KEY,
+      }),
+      API_TIMEOUT_MS,
+    );
     if (!res || !res.ok) return { result: null, rateLimited: false };
 
     const r = res.data.Response;

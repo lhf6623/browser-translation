@@ -131,6 +131,20 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * 给 Promise 加超时，超时后 reject。
+ * @param p 原始 Promise
+ * @param ms 超时毫秒数
+ */
+export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), ms),
+    ),
+  ]);
+}
+
 // ---- 引擎调度池 ----
 
 /**

@@ -3,6 +3,7 @@
 import { browser } from "wxt/browser";
 import type { EngineResult } from "./types";
 import { YD_APPKEY, YD_SECRET } from "../config";
+import { API_TIMEOUT_MS, withTimeout } from "../core";
 
 function truncate(q: string): string {
   const len = q.length;
@@ -35,10 +36,13 @@ export async function tryYoudaoTranslate(text: string): Promise<EngineResult> {
   };
 
   try {
-    const res = await browser.runtime.sendMessage({
-      action: "fetchYoudao",
-      params,
-    });
+    const res = await withTimeout(
+      browser.runtime.sendMessage({
+        action: "fetchYoudao",
+        params,
+      }),
+      API_TIMEOUT_MS,
+    );
     if (!res || !res.ok) return { result: null, rateLimited: false };
 
     const data = res.data;
