@@ -1,7 +1,6 @@
 // ========== 快捷翻译 Background Service Worker ==========
 
 import { browser } from "wxt/browser";
-import { TX_SECRET_ID, TX_SECRET_KEY } from "@/lib/config";
 
 export default defineBackground(() => {
   let lastToggle = 0;

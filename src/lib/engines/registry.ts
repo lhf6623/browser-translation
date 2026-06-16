@@ -1,6 +1,5 @@
 // ========== 引擎注册表 ==========
 
-import type { EngineState } from "./types";
 import { tryGoogleTranslate } from "./google";
 import { tryBaiduTranslate } from "./baidu";
 import { tryYoudaoTranslate } from "./youdao";

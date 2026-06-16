@@ -4,9 +4,10 @@
 import { browser } from "wxt/browser";
 import { S, state } from "@/lib/core";
 import { memCache } from "@/lib/core";
-import { findBlocks, inView } from "@/lib/scanner";
+import { findBlocks } from "@/lib/scanner";
 import { doBlocks } from "@/lib/translator";
 import { removeAll } from "@/lib/insert";
+import { QtElement } from "@/lib/qtelement";
 import "@/lib/debug"; // 初始化调试面板
 import "./styles.css";
 
@@ -32,9 +33,10 @@ export default defineContentScript({
     function scanAndTranslate() {
       if (!S.translated() || S.translating()) return;
       const all = findBlocks();
-      const fresh = all.filter(
-        (b) => !b.hasAttribute("data-qt") && inView(b),
-      );
+      const fresh = all.filter((b) => {
+        const qel = new QtElement(b);
+        return !qel.done && qel.inView;
+      });
       if (!fresh.length) return;
       S.set("translating");
       doBlocks(fresh).then(() => {
@@ -104,7 +106,8 @@ export default defineContentScript({
 
       const visible: HTMLElement[] = [];
       for (const b of all) {
-        if (inView(b)) visible.push(b);
+        const qel = new QtElement(b);
+        if (qel.inView) visible.push(b);
       }
 
       if (visible.length) await doBlocks(visible);

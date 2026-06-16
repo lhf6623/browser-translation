@@ -10,24 +10,15 @@ import {
   sleep,
   engines,
 } from "./core";
-import { inView } from "./scanner";
-import { insert } from "./insert";
 import { dbgLog } from "./debug";
+import { QtElement } from "./qtelement";
 
-/**
- * 去除 API 返回结果中的 HTML 标签。
- * @param s 可能含标签的原文
- * @returns 纯文本
- */
+// ---- 工具 ----
+
 function cleanHtml(s: string): string {
   return s.replace(/<\/?[a-zA-Z][^>]*>/g, "");
 }
 
-/**
- * 生成翻译缓存键（基于文本内容的双哈希）。
- * @param s 待哈希文本
- * @returns 以 `qt_` 为前缀的缓存键
- */
 function hashKey(s: string): string {
   let h1 = 0,
     h2 = 0;
@@ -39,10 +30,10 @@ function hashKey(s: string): string {
   return "qt_" + (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36);
 }
 
+// ---- 单条文本 API 调用 ----
+
 /**
  * 翻译单条文本：缓存命中则直接返回，否则调用对应引擎 API。
- * @param text 待翻译文本
- * @param engineObj 引擎状态对象（用于统计耗时/调用次数/限流）
  * @returns 翻译结果，失败返回 null
  */
 async function translateText(
@@ -51,13 +42,11 @@ async function translateText(
 ): Promise<string | null> {
   const key = hashKey(text);
 
-  // 查内存缓存
   if (memCache.has(key)) {
     dbgLog("", text, false, true);
     return memCache.get(key)!;
   }
 
-  // 查持久缓存
   const stored = await browser.storage.local.get(key);
   const cached = stored[key] as string | undefined;
   if (cached) {
@@ -66,12 +55,10 @@ async function translateText(
     return cached;
   }
 
-  // 调用引擎
   const t0 = Date.now();
   const fn = getTranslateFn(engineObj.name);
   const r = await fn(text);
-  const ms = Date.now() - t0;
-  engineObj.sumMs += ms;
+  engineObj.sumMs += Date.now() - t0;
   engineObj.calls++;
 
   if (r.result) {
@@ -89,130 +76,121 @@ async function translateText(
   return null;
 }
 
+/** 翻译 core，超长则按句子拆分逐句翻译 */
+async function translateCore(
+  core: string,
+  eng: EngineState,
+): Promise<string | null> {
+  if (core.length <= MAX_TEXT_LEN) {
+    return translateText(core, eng);
+  }
+  const sentences = core.match(/[^.!?\n]+[.!?\n]*/g) || [core];
+  const out: string[] = [];
+  for (const s of sentences) {
+    const tr = await translateText(s.trim(), eng);
+    if (!tr) return null;
+    out.push(tr);
+  }
+  return out.join(" ");
+}
+
+// ---- 单元素翻译 ----
+
 /**
- * 单个引擎的翻译 worker：从共享队列抢任务，循环直到队列空或自身不可用。
- * 遵守引擎的 `delayMs` 请求间隔，被限流时主动退出。
- * @param eng 引擎状态
- * @param queue 共享翻译任务队列
+ * 对一个元素执行完整翻译流程：黑名单检查 → 翻译 → 成功插入 / 失败拉黑重试。
+ * 无论成功失败都会在 finally 中移除 loader。
+ */
+async function tryTranslateElement(
+  qel: QtElement,
+  eng: EngineState,
+  queue: QtElement[],
+): Promise<void> {
+  if (qel.isBlocked(eng.name)) {
+    // 全部引擎已拉黑 → 标记失败，后续扫描跳过
+    if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
+    return;
+  }
+
+  const parts = qel.checkTranslatable();
+  if (!parts) {
+    qel.finish();
+    return;
+  }
+
+  qel.showLoader();
+  try {
+    const result = await translateCore(parts.core, eng);
+    if (state.cancelled) return;
+
+    if (result) {
+      const span = qel.insertTranslation(parts.prefix + result + parts.suffix);
+      if (span) state.translatedEls.push(span);
+    } else {
+      qel.addBlock(eng.name);
+      if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
+      else queue.push(qel);
+    }
+  } catch {
+    qel.addBlock(eng.name);
+    if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
+    else queue.push(qel);
+  } finally {
+    qel.hideLoader();
+  }
+}
+
+// ---- 引擎调度 ----
+
+/** 筛选当前空闲可用引擎 */
+function pickReady(now: number): EngineState[] {
+  return engines.filter((e) => {
+    if (e.busy) return false;
+    if (e.rateLimitUntil > now) return false;
+    if (now - e.lastCall < e.delayMs) return false;
+    return true;
+  });
+}
+
+/**
+ * 引擎翻译 worker：循环从队列取元素，调用 tryTranslateElement。
+ * 遵守 delayMs 间隔，限流或队列空时退出。
  */
 async function translateWorker(
   eng: EngineState,
-  queue: HTMLElement[],
+  queue: QtElement[],
 ): Promise<void> {
   eng.busy = true;
-
   try {
     while (queue.length && !state.cancelled) {
-      // 遵守引擎自身的请求间隔
       const wait = eng.delayMs - (Date.now() - eng.lastCall);
       if (wait > 0) await sleep(wait);
       if (state.cancelled) break;
-
-      // 被限流则退出，让外层下次再调度
       if (eng.rateLimitUntil > Date.now()) break;
 
-      const el = queue.shift();
-      if (!el) break;
+      const qel = queue.shift();
+      if (!qel) break;
 
-      // ★ 请求发出前记录时间，之后不覆盖
       eng.lastCall = Date.now();
-
-      if (el.hasAttribute("data-qt")) continue;
-      if (!inView(el)) continue;
-
-      try {
-        let text = (el.textContent || "").trim();
-        if (!text) {
-          el.setAttribute("data-qt", "1");
-          continue;
-        }
-
-        const firstAlpha = text.search(/[a-zA-Z]/);
-        const lastAlpha = text.search(/[a-zA-Z](?=[^a-zA-Z]*$)/);
-        if (firstAlpha === -1 || lastAlpha - firstAlpha < 1) {
-          el.setAttribute("data-qt", "1");
-          continue;
-        }
-
-        const prefix = text.slice(0, firstAlpha);
-        const core = text.slice(firstAlpha, lastAlpha + 1);
-        const suffix = text.slice(lastAlpha + 1);
-
-        // 移除旧 loader
-        const oldLoader = el.querySelector(".qt-loader");
-        if (oldLoader) oldLoader.remove();
-        const loader = document.createElement("span");
-        loader.className = "qt-loader qt-skip";
-        el.appendChild(loader);
-
-        let result: string | null;
-        if (core.length > MAX_TEXT_LEN) {
-          const sentences = core.match(/[^.!?\n]+[.!?\n]*/g) || [core];
-          const parts: string[] = [];
-          for (const s of sentences) {
-            const tr = await translateText(s.trim(), eng);
-            if (!tr) break;
-            parts.push(tr);
-          }
-          if (parts.length === sentences.length) {
-            result = parts.join(" ");
-          } else {
-            result = null;
-          }
-        } else {
-          result = await translateText(core, eng);
-        }
-        loader.remove();
-
-        if (state.cancelled) break;
-
-        if (result) {
-          insert(el, prefix + result + suffix);
-        } else {
-          const tries = (parseInt(el.getAttribute("data-qt-retry") || "0") || 0) + 1;
-          if (tries < 5) {
-            el.setAttribute("data-qt-retry", String(tries));
-            queue.push(el);
-          } else {
-            el.removeAttribute("data-qt-retry");
-            el.setAttribute("data-qt", "1");
-          }
-        }
-      } catch {
-        const tries = (parseInt(el.getAttribute("data-qt-retry") || "0") || 0) + 1;
-        if (tries < 5) {
-          el.setAttribute("data-qt-retry", String(tries));
-          queue.push(el);
-        } else {
-          el.removeAttribute("data-qt-retry");
-          el.setAttribute("data-qt", "1");
-        }
-      }
+      await tryTranslateElement(qel, eng, queue);
     }
   } finally {
     eng.busy = false;
   }
 }
 
+// ---- 入口 ----
+
 /**
- * 批量翻译入口：收集所有空闲可用引擎，并发执行翻译。
- * 每个引擎独立从共享队列抢任务，失败项自动重试（最多 5 次）。
- * @param blocks 待翻译的 DOM 元素列表
+ * 批量翻译入口：收集空闲引擎并发执行。
+ * 失败项推回队列由其他引擎重试，全部引擎拉黑后自动放弃。
  */
 export async function doBlocks(blocks: HTMLElement[]): Promise<void> {
-  const queue = [...blocks];
+  const queue: QtElement[] = blocks.map((el) => new QtElement(el));
   let waitStart = 0;
 
   while (queue.length && !state.cancelled) {
     const now = Date.now();
-
-    // 收集所有空闲可用的引擎
-    const ready = engines.filter((e) => {
-      if (e.busy) return false;
-      if (e.rateLimitUntil > now) return false;
-      if (now - e.lastCall < e.delayMs) return false;
-      return true;
-    });
+    const ready = pickReady(now);
 
     if (!ready.length) {
       if (!waitStart) waitStart = now;
@@ -225,7 +203,6 @@ export async function doBlocks(blocks: HTMLElement[]): Promise<void> {
     }
     waitStart = 0;
 
-    // 所有空闲引擎并发运行
     const workers = ready.map((eng) => translateWorker(eng, queue));
     await Promise.all(workers);
   }

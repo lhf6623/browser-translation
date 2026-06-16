@@ -3,6 +3,7 @@
 import { reactive } from "vue";
 import { createApp } from "vue";
 import { browser } from "wxt/browser";
+import { CSS } from "./core";
 import DebugPanel from "./DebugPanel.vue";
 
 interface LogEntry {
@@ -30,7 +31,7 @@ let _mounted = false;
 function mount() {
   if (_mounted || !dbgState.enabled) return;
   const container = document.createElement("div");
-  container.className = "qt-skip";
+  container.className = CSS.SKIP;
   document.body.appendChild(container);
   createApp(DebugPanel).mount(container);
   _mounted = true;

@@ -1,7 +1,7 @@
 # 快捷翻译 - 浏览器扩展
 
-> 快捷键翻译整页为英→中双语对照，5 引擎智能调度。
-> 基于 **WXT + TypeScript** 工程化重构。
+> 快捷键翻译整页为英→中双语对照，5 引擎并发调度。
+> 基于 **WXT + TypeScript + Vue 3** 工程化重构。
 
 ## 安装 & 开发
 
@@ -52,13 +52,15 @@ src/
 │   ├── styles.css          # 译文样式
 │   └── popup/
 │       ├── index.html      # 弹窗 UI
-│       └── main.ts         # 弹窗逻辑
+│       └── main.ts         # 弹窗逻辑（Vue 3）
 ├── lib/                    # 共享模块
-│   ├── core.ts             # 常量 · 状态机 · 引擎池 · pickEngine
-│   ├── scanner.ts          # DOM 文本块扫描
-│   ├── translator.ts       # 翻译调度：translateText + doBlocks
-│   ├── insert.ts           # 译文 DOM 插入与移除
-│   ├── debug.ts            # 调试面板
+│   ├── core.ts             # 常量 · 状态机 · 引擎池 · 缓存 · inView
+│   ├── qtelement.ts        # DOM 元素抽象层（data-qt 属性管理 + 文本提取 + 译文插入）
+│   ├── scanner.ts          # DOM 文本块扫描（迭代栈遍历）
+│   ├── translator.ts       # 翻译调度：并发引擎 worker + 黑名单重试
+│   ├── insert.ts           # 译文 DOM 移除
+│   ├── debug.ts            # 调试面板初始化
+│   ├── DebugPanel.vue      # 调试面板 UI（Vue 3）
 │   ├── config.ts           # API 密钥（从构建时环境变量注入）
 │   ├── hash.ts             # MD5 实现（百度签名用）
 │   └── engines/
@@ -81,47 +83,93 @@ src/
   ▼
 translatePage() → findBlocks() → doBlocks()
                     │               │
-                    │ 全量扫描       │ 单 worker
-                    │ 跳过已翻译      │ pickEngine() 轮转找空闲
+                    │ 全量 DOM 扫描   │ pickReady() → 多引擎并发
+                    │ 跳过已翻译/失败   │
                     ▼               ▼
-               inView 过滤      translateText()
+               inView 过滤      translateWorker × N
                视口内入队          │
-                                 ├── 内存缓存 (Map)
+                                 ├── 内存缓存 (LRU Map, 上限 1000)
                                  ├── 持久缓存 (chrome.storage)
                                  └── 引擎池: MM GT BD YD TX
+                                      │
+                                      └── 各自独立 delayMs 并发执行
 
 滚动/缩放 → scanAndTranslate() → 链式补译
                                       │
                               翻译完 → setTimeout 100ms 再扫
 ```
 
+## QtElement 元素抽象
+
+避免直接操作 DOM 属性，通过 `QtElement` 封装元素生命周期：
+
+| 属性 | 含义 | 设置者 |
+| ------ | ------ | ------ |
+| `data-qt="1"` | 翻译成功 | `insertTranslation()` → `finish()` |
+| `data-qt-failed="1"` | 全部引擎翻译失败 | `tryTranslateElement` → `markFailed()` |
+| `data-qt-bl="MM,GT,…"` | 翻译失败的引擎名单 | `addBlock()` |
+| `data-qt-trans="1"` | 译文 span 包装元素 | `insertTranslation()` |
+
+两种"完成"状态自动被扫描器跳过：
+
+```
+data-qt="1"        → 翻译成功，显示译文
+data-qt-failed="1" → 全部引擎失败，静默放弃
+```
+
+切换翻译开关时 `cleanupAll()` 清除全部属性，重新开始。
+
 ## 引擎调度
 
-- **单 worker** 串行翻译，`pickEngine()` 轮转选择空闲引擎
-- 引擎状态：`busy` / `lastCall` / `rateLimitUntil`（限速冷却 60s）
-- 限速检测：MM 429、GT 403/429、BD 54003、YD 411、TX LimitExceeded
-- 翻译失败 → 塞回队尾换引擎；视口外 → 跳过不标记，下次重扫
+- **多引擎并发**：`pickReady()` 筛选所有空闲（非 busy、未限流、已过间隔）引擎，`Promise.all` 并发启动 worker
+- **独立请求间隔**：每个引擎独立 `delayMs`，避免同时打爆 API
+
+| 引擎 | delayMs | 说明 |
+| ------ | ------ | ------ |
+| MM (MyMemory) | 100 | 免费，不限流 |
+| GT (Google) | 500 | |
+| BD (百度) | 1000 | |
+| YD (有道) | 200 | |
+| TX (腾讯) | 200 | |
+
+- 限流检测：MM 429、GT 403/429、BD 54003、YD 411、TX LimitExceeded → 冷却 60s
+- API 超时保护：统一 8s，超时视为失败
 - 超长文本（>3000 字符）→ 按句子拆分，同引擎逐个翻译再拼接
+
+## 翻译失败处理
+
+每个元素维护引擎黑名单 `data-qt-bl`（以逗号分隔的引擎名）。失败流程：
+
+```text
+引擎 A 失败 → addBlock("A") → 推回队尾 → 引擎 B 尝试
+引擎 B 失败 → addBlock("B") → 推回队尾 → 引擎 C 尝试
+...
+全部 5 引擎失败 → markFailed() → data-qt-failed="1" → 扫描器跳过
+```
+
+- 黑名单跨扫描周期持久化，避免重复浪费 API 调用
+- 切换翻译开关 → `cleanupAll()` 清空黑名单 → 全新重试
 
 ## 状态管理
 
 `<html qt-state>` 属性：`""` | `"translating"` | `"translated"`
 
+全局状态 `state`：`cancelled` / `translatedEls[]` / `translatedAt`
+
 ## 配置
 
 | 参数 | 值 | 说明 |
-|------|-----|------|
-| `DELAY_MS` | 200 | 引擎请求间隔 |
+| ------ | --- | ------ |
 | `MAX_TEXT_LEN` | 3000 | 单次翻译上限，超长按句子拆分 |
-| `MIN_TEXT_LEN` | 1 | 文本块最小字符 |
-| `VIEWPORT_MARGIN` | 300 | 视口扩展边距 |
-| `API_TIMEOUT_MS` | 8000 | API 超时 |
+| `MIN_TEXT_LEN` | 1 | 文本块最小字符数 |
+| `VIEWPORT_MARGIN` | 300 | 视口扩展边距（px），提前翻译即将可见内容 |
+| `API_TIMEOUT_MS` | 8000 | 单次 API 请求超时（ms） |
 
 ## 权限
 
 | 权限 | 用途 |
-|------|------|
+| ------ | ------ |
 | `activeTab` | 当前标签注入 |
 | `scripting` | 动态注入 |
-| `storage` | 翻译缓存 + 调试开关状态 + 清除缓存 |
+| `storage` | 翻译缓存 + 调试开关状态 |
 | `host_permissions` | 翻译 API + CORS 代理 |

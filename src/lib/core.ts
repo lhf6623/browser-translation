@@ -36,8 +36,55 @@ export const state = {
 
 // ---- 内存缓存 ----
 
-/** 文本 → 译文的运行时内存缓存 */
-export const memCache = new Map<string, string>();
+/**
+ * LRU 缓存，基于 Map 插入顺序。
+ * 达到上限时自动淘汰最久未访问的条目。
+ */
+class LRUCache<K, V> {
+  private map = new Map<K, V>();
+  constructor(private max: number) {}
+
+  get(key: K): V | undefined {
+    const v = this.map.get(key);
+    if (v !== undefined) {
+      // 删后重插 → 移到末尾（最新）
+      this.map.delete(key);
+      this.map.set(key, v);
+    }
+    return v;
+  }
+
+  set(key: K, value: V): void {
+    if (this.map.has(key)) {
+      this.map.delete(key);
+    } else if (this.map.size >= this.max) {
+      // 淘汰最旧条目（Map 第一个）
+      const first = this.map.keys().next().value!;
+      this.map.delete(first);
+    }
+    this.map.set(key, value);
+  }
+
+  has(key: K): boolean {
+    return this.map.has(key);
+  }
+
+  clear(): void {
+    this.map.clear();
+  }
+}
+
+/** 文本 → 译文的运行时内存缓存，上限 1000 条 */
+export const memCache = new LRUCache<string, string>(1000);
+
+// ---- CSS 类名常量 ----
+
+/** 翻译相关 CSS 类名，集中管理避免硬编码散落各处 */
+export const CSS = {
+  SKIP: "qt-skip",
+  LOADER: "qt-loader",
+  TRANS: "qt-trans",
+} as const;
 
 // ---- 配置常量 ----
 
@@ -47,6 +94,19 @@ export const MAX_TEXT_LEN = 3000;
 export const MIN_TEXT_LEN = 1;
 /** 视口外预加载的额外距离（像素） */
 export const VIEWPORT_MARGIN = 300;
+
+/** 元素是否在视口内（含一定边距） */
+export function inView(el: Element): boolean {
+  const r = el.getBoundingClientRect();
+  const wh = window.innerHeight || document.documentElement.clientHeight;
+  const ww = window.innerWidth || document.documentElement.clientWidth;
+  return (
+    r.top < wh + VIEWPORT_MARGIN &&
+    r.bottom > -VIEWPORT_MARGIN &&
+    r.left < ww &&
+    r.right > 0
+  );
+}
 /** 单次 API 请求超时（毫秒） */
 export const API_TIMEOUT_MS = 8000;
 
