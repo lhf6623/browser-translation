@@ -93,8 +93,12 @@ async function tryTranslateElement(
     return;
   }
 
-  const parts = qel.checkTranslatable();
+  // 不在视口内 → 不标记，留给后续扫描
+  if (!qel.inView) return;
+
+  const parts = qel.extractCore();
   if (!parts) {
+    // 没有英文文本 → 标记 done，后续扫描跳过
     qel.finish();
     return;
   }

@@ -27,20 +27,40 @@ export const dbgState = reactive({
 });
 
 let _mounted = false;
+let _app: ReturnType<typeof createApp> | null = null;
+
+const CONTAINER_ID = "qt-debug-container";
 
 function mount() {
   if (_mounted || !dbgState.enabled) return;
+  if (!document.body) return;
+
+  // 清理可能残留的旧容器（页面可能移除了 #qt-debug-panel 但容器还在）
+  document.getElementById(CONTAINER_ID)?.remove();
+
   const container = document.createElement("div");
+  container.id = CONTAINER_ID;
   container.className = CSS.SKIP;
   document.body.appendChild(container);
-  createApp(DebugPanel).mount(container);
-  _mounted = true;
+
+  const app = createApp(DebugPanel);
+  app.config.errorHandler = () => {}; // Vue 更新时若 DOM 被外部改动，静默忽略
+  try {
+    app.mount(container);
+    _app = app;
+    _mounted = true;
+  } catch {
+    container.remove();
+  }
 }
 
 function unmount() {
   if (!_mounted) return;
-  const el = document.querySelector("#qt-debug-panel");
-  if (el) el.remove();
+  if (_app) {
+    try { _app.unmount(); } catch { /* ignore */ }
+  }
+  document.getElementById(CONTAINER_ID)?.remove();
+  _app = null;
   _mounted = false;
 }
 

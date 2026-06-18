@@ -83,15 +83,6 @@ export class QtElement {
     };
   }
 
-  /**
-   * 综合检查：是否可翻译。done + visible + 有字母 → 返回文本段。
-   * 不可翻译返回 null。
-   */
-  checkTranslatable(): { prefix: string; core: string; suffix: string } | null {
-    if (this.done || !this.inView) return null;
-    return this.extractCore();
-  }
-
   // ====== 加载动画 ======
 
   /** 插入翻译中动画 span，返回它。已存在则先移除旧的 */
@@ -154,8 +145,9 @@ export class QtElement {
       span.textContent = text;
 
       if (this.insertAfter) {
-        if (!this.el.parentNode) return null;
-        this.el.parentNode.insertBefore(span, this.el.nextSibling);
+        const parent = this.el.parentNode;
+        if (!parent) return null;
+        parent.insertBefore(span, this.el.nextSibling);
       } else {
         this.el.appendChild(span);
       }

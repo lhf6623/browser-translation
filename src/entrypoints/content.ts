@@ -28,9 +28,6 @@ export default defineContentScript({
     // 滚动 / 缩放补译
     // ==========================================
 
-    let resizeTimer: ReturnType<typeof setTimeout> | null = null;
-    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
-
     function scanAndTranslate() {
       if (!S.translated() || S.translating()) return;
       const all = findBlocks();
@@ -45,25 +42,33 @@ export default defineContentScript({
         if (state.generation !== gen) return;
         if (state.cancelled) return;
         S.set("translated");
-        setTimeout(scanAndTranslate, 100);
+        // 翻译完立即再扫一次，漏掉的内容（翻译期间滚入视口的）会被补上
+        scanAndTranslate();
       });
     }
 
-    window.addEventListener("resize", () => {
+    // 滚动 / 缩放事件防抖，翻译中则重试等待
+    function scheduleScan(timerRef: {
+      current: ReturnType<typeof setTimeout> | null;
+    }): void {
       if (Date.now() - state.translatedAt < 1000) return;
-      if (resizeTimer) clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(scanAndTranslate, 300);
-    });
+      if (timerRef.current) clearTimeout(timerRef.current);
+      const tryScan = () => {
+        if (S.translating()) {
+          timerRef.current = setTimeout(tryScan, 200);
+          return;
+        }
+        scanAndTranslate();
+      };
+      timerRef.current = setTimeout(tryScan, 300);
+    }
 
-    window.addEventListener(
-      "scroll",
-      () => {
-        if (Date.now() - state.translatedAt < 1000) return;
-        if (scrollTimer) clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(scanAndTranslate, 300);
-      },
-      { passive: true },
-    );
+    const scrollTimer = { current: null as ReturnType<typeof setTimeout> | null };
+    const resizeTimer = { current: null as ReturnType<typeof setTimeout> | null };
+
+    window.addEventListener("resize", () => scheduleScan(resizeTimer));
+    // capture: true 捕获页面内任意元素的滚动（scroll 事件不冒泡）
+    document.addEventListener("scroll", () => scheduleScan(scrollTimer), { passive: true, capture: true });
 
     // ==========================================
     // 消息：快捷键切换 / 清缓存
