@@ -2,33 +2,15 @@
 
 import { browser } from "wxt/browser";
 import type { EngineState } from "./engines/types";
-import { getTranslateFn } from "./engines/registry";
-import {
-  state,
-  memCache,
-  MAX_TEXT_LEN,
-  sleep,
-  engines,
-} from "./core";
+import { getEngineDef } from "./engines/registry";
+import { executeEngine } from "./engines/executor";
+import { engines, pickReady } from "./engines/pool";
+import { state } from "./state";
+import { MAX_TEXT_LEN } from "./constants";
+import { sleep, cleanHtml } from "./utils";
+import { memCache, hashKey } from "./utils/cache";
 import { dbgLog } from "./debug";
 import { QtElement } from "./qtelement";
-
-// ---- 工具 ----
-
-function cleanHtml(s: string): string {
-  return s.replace(/<\/?[a-zA-Z][^>]*>/g, "");
-}
-
-function hashKey(s: string): string {
-  let h1 = 0,
-    h2 = 0;
-  for (let i = 0; i < s.length; i++) {
-    const c = s.charCodeAt(i);
-    h1 = ((h1 << 5) - h1 + c) | 0;
-    h2 = ((h2 << 7) - h2 + c) | 0;
-  }
-  return "qt_" + (h1 >>> 0).toString(36) + (h2 >>> 0).toString(36);
-}
 
 // ---- 单条文本 API 调用 ----
 
@@ -56,8 +38,8 @@ async function translateText(
   }
 
   const t0 = Date.now();
-  const fn = getTranslateFn(engineObj.name);
-  const r = await fn(text);
+  const def = getEngineDef(engineObj.name);
+  const r = await executeEngine(text, def);
   engineObj.sumMs += Date.now() - t0;
   engineObj.calls++;
 
@@ -104,9 +86,9 @@ async function tryTranslateElement(
   qel: QtElement,
   eng: EngineState,
   queue: QtElement[],
+  gen: number,
 ): Promise<void> {
   if (qel.isBlocked(eng.name)) {
-    // 全部引擎已拉黑 → 标记失败，后续扫描跳过
     if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
     return;
   }
@@ -120,7 +102,8 @@ async function tryTranslateElement(
   qel.showLoader();
   try {
     const result = await translateCore(parts.core, eng);
-    if (state.cancelled) return;
+    // 当前会话已取消或已被新一轮翻译取代 → 丢弃结果
+    if (state.cancelled || state.generation !== gen) return;
 
     if (result) {
       const span = qel.insertTranslation(parts.prefix + result + parts.suffix);
@@ -131,6 +114,7 @@ async function tryTranslateElement(
       else queue.push(qel);
     }
   } catch {
+    if (state.generation !== gen) return;
     qel.addBlock(eng.name);
     if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
     else queue.push(qel);
@@ -141,16 +125,6 @@ async function tryTranslateElement(
 
 // ---- 引擎调度 ----
 
-/** 筛选当前空闲可用引擎 */
-function pickReady(now: number): EngineState[] {
-  return engines.filter((e) => {
-    if (e.busy) return false;
-    if (e.rateLimitUntil > now) return false;
-    if (now - e.lastCall < e.delayMs) return false;
-    return true;
-  });
-}
-
 /**
  * 引擎翻译 worker：循环从队列取元素，调用 tryTranslateElement。
  * 遵守 delayMs 间隔，限流或队列空时退出。
@@ -158,20 +132,21 @@ function pickReady(now: number): EngineState[] {
 async function translateWorker(
   eng: EngineState,
   queue: QtElement[],
+  gen: number,
 ): Promise<void> {
   eng.busy = true;
   try {
-    while (queue.length && !state.cancelled) {
+    while (queue.length && !state.cancelled && state.generation === gen) {
       const wait = eng.delayMs - (Date.now() - eng.lastCall);
       if (wait > 0) await sleep(wait);
-      if (state.cancelled) break;
+      if (state.cancelled || state.generation !== gen) break;
       if (eng.rateLimitUntil > Date.now()) break;
 
       const qel = queue.shift();
       if (!qel) break;
 
       eng.lastCall = Date.now();
-      await tryTranslateElement(qel, eng, queue);
+      await tryTranslateElement(qel, eng, queue, gen);
     }
   } finally {
     eng.busy = false;
@@ -185,12 +160,13 @@ async function translateWorker(
  * 失败项推回队列由其他引擎重试，全部引擎拉黑后自动放弃。
  */
 export async function doBlocks(blocks: HTMLElement[]): Promise<void> {
+  const gen = state.generation;
   const queue: QtElement[] = blocks.map((el) => new QtElement(el));
   let waitStart = 0;
 
-  while (queue.length && !state.cancelled) {
+  while (queue.length && !state.cancelled && state.generation === gen) {
     const now = Date.now();
-    const ready = pickReady(now);
+    const ready = pickReady();
 
     if (!ready.length) {
       if (!waitStart) waitStart = now;
@@ -203,7 +179,7 @@ export async function doBlocks(blocks: HTMLElement[]): Promise<void> {
     }
     waitStart = 0;
 
-    const workers = ready.map((eng) => translateWorker(eng, queue));
+    const workers = ready.map((eng) => translateWorker(eng, queue, gen));
     await Promise.all(workers);
   }
 }

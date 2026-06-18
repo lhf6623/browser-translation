@@ -1,9 +1,7 @@
-// ========== 有道翻译引擎 ==========
+// ========== 有道翻译引擎（代理，需要 APP_KEY + SECRET 签名） ==========
 
-import { browser } from "wxt/browser";
-import type { EngineResult } from "./types";
+import type { EngineDef } from "./types";
 import { YD_APPKEY, YD_SECRET } from "../config";
-import { API_TIMEOUT_MS, withTimeout } from "../core";
 
 function truncate(q: string): string {
   const len = q.length;
@@ -18,40 +16,41 @@ async function sha256(s: string): Promise<string> {
     .join("");
 }
 
-export async function tryYoudaoTranslate(text: string): Promise<EngineResult> {
-  const salt = crypto.randomUUID();
-  const curtime = String(Math.floor(Date.now() / 1000));
-  const signStr = YD_APPKEY + truncate(text) + salt + curtime + YD_SECRET;
-  const sign = await sha256(signStr);
+export const youdaoDef: EngineDef = {
+  name: "YD",
 
-  const params = {
-    q: text,
-    from: "en",
-    to: "zh-CHS",
-    appKey: YD_APPKEY,
-    salt,
-    sign,
-    signType: "v3",
-    curtime,
-  };
+  buildPayload: async (text) => {
+    const salt = crypto.randomUUID();
+    const curtime = String(Math.floor(Date.now() / 1000));
+    const signStr = YD_APPKEY + truncate(text) + salt + curtime + YD_SECRET;
+    const sign = await sha256(signStr);
 
-  try {
-    const res = await withTimeout(
-      browser.runtime.sendMessage({
-        action: "fetchYoudao",
-        params,
-      }),
-      API_TIMEOUT_MS,
-    );
-    if (!res || !res.ok) return { result: null, rateLimited: false };
+    const params = {
+      q: text,
+      from: "en",
+      to: "zh-CHS",
+      appKey: YD_APPKEY,
+      salt,
+      sign,
+      signType: "v3",
+      curtime,
+    };
 
-    const data = res.data;
-    if (data.errorCode === "411") return { result: null, rateLimited: true };
-    if (data.translation?.[0]) {
-      return { result: data.translation[0], rateLimited: false };
-    }
-    return { result: null, rateLimited: false };
-  } catch {
-    return { result: null, rateLimited: false };
-  }
-}
+    return {
+      url: "https://openapi.youdao.com/api",
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(params).toString(),
+    };
+  },
+
+  parseResponse: (data) => {
+    const d = data as { translation?: string[] };
+    return d.translation?.[0] ?? null;
+  },
+
+  isRateLimited: (data) => {
+    const d = data as { errorCode?: string };
+    return d.errorCode === "411";
+  },
+};

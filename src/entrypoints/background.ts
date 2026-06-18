@@ -56,139 +56,61 @@ export default defineBackground(() => {
   });
 
   // ===========================
-  // CORS 代理：百度 / 有道 / 腾讯
+  // 通用 CORS 代理
   // ===========================
+  // 所有引擎的 HTTP 请求统一在此发起。
+  // content script 不直接 fetch，只管拼请求参数（URL/方法/头/体），
+  // 签名逻辑也在 content script 侧完成（crypto.subtle 在 isolated world 可用）。
 
   const PROXY_TIMEOUT = 8000;
+  const activeControllers = new Set<AbortController>();
 
-  browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-    if (msg.action === "fetchBaidu") {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), PROXY_TIMEOUT);
-      fetch(msg.url, { signal: ctrl.signal })
-        .then(async (res) => {
-          clearTimeout(timer);
-          sendResponse({ ok: res.ok, status: res.status, data: await res.json() });
-        })
-        .catch((err) => {
-          clearTimeout(timer);
-          sendResponse({ ok: false, error: (err as Error).message });
-        });
-      return true;
-    }
-
-    if (msg.action === "fetchYoudao") {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), PROXY_TIMEOUT);
-      fetch("https://openapi.youdao.com/api", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams(msg.params).toString(),
-        signal: ctrl.signal,
-      })
-        .then(async (res) => {
-          clearTimeout(timer);
-          sendResponse({ ok: res.ok, status: res.status, data: await res.json() });
-        })
-        .catch((err) => {
-          clearTimeout(timer);
-          sendResponse({ ok: false, error: (err as Error).message });
-        });
-      return true;
-    }
-
-    if (msg.action === "fetchTencent") {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), PROXY_TIMEOUT);
-      doTencent(msg.q, msg.secretId, msg.secretKey, ctrl.signal)
-        .then((r) => {
-          clearTimeout(timer);
-          sendResponse(r);
-        })
-        .catch((err) => {
-          clearTimeout(timer);
-          sendResponse({ ok: false, error: (err as Error).message });
-        });
-      return true;
-    }
-  });
-
-  // ===========================
-  // 腾讯云 TC3 签名
-  // ===========================
-
-  async function hex256(s: string): Promise<string> {
-    const buf = new TextEncoder().encode(s);
-    const hash = await crypto.subtle.digest("SHA-256", buf);
-    return Array.from(new Uint8Array(hash as ArrayBuffer))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
-  async function hmac256(key: string | Uint8Array<ArrayBuffer>, msg: string): Promise<Uint8Array<ArrayBuffer>> {
-    const k = await crypto.subtle.importKey(
-      "raw",
-      typeof key === "string" ? new TextEncoder().encode(key) : key,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-    const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg));
-    return new Uint8Array(sig);
-  }
-
-  async function hmac256hex(key: string | Uint8Array<ArrayBuffer>, msg: string): Promise<string> {
-    const sig = await hmac256(key, msg);
-    return Array.from(sig)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
-  async function doTencent(
-    text: string,
-    secretId: string,
-    secretKey: string,
+  /** 通用代理 fetch：发请求 + 解析 JSON，返回统一格式 */
+  async function proxyFetch(
+    url: string,
+    init: RequestInit,
     signal: AbortSignal,
-  ) {
-    const host = "tmt.tencentcloudapi.com";
-    const service = "tmt";
-    const timestamp = Math.floor(Date.now() / 1000);
-    const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
-
-    const payload = JSON.stringify({
-      SourceText: text,
-      Source: "en",
-      Target: "zh",
-      ProjectId: 0,
-    });
-    const hp = await hex256(payload);
-    const ch = `content-type:application/json\nhost:${host}\n`;
-    const cr = `POST\n/\n\n${ch}\ncontent-type;host\n${hp}`;
-    const hr = await hex256(cr);
-    const cs = `${date}/${service}/tc3_request`;
-    const sts = `TC3-HMAC-SHA256\n${timestamp}\n${cs}\n${hr}`;
-
-    const sd = await hmac256("TC3" + secretKey, date);
-    const ss = await hmac256(sd, service);
-    const ssk = await hmac256(ss, "tc3_request");
-    const sig = await hmac256hex(ssk, sts);
-    const auth = `TC3-HMAC-SHA256 Credential=${secretId}/${cs}, SignedHeaders=content-type;host, Signature=${sig}`;
-
-    const res = await fetch(`https://${host}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Host: host,
-        "X-TC-Action": "TextTranslate",
-        "X-TC-Version": "2018-03-21",
-        "X-TC-Region": "ap-guangzhou",
-        "X-TC-Timestamp": String(timestamp),
-        Authorization: auth,
-      },
-      body: payload,
-      signal,
-    });
+  ): Promise<{ ok: boolean; status: number; data: unknown }> {
+    const res = await fetch(url, { ...init, signal });
     const data = await res.json();
     return { ok: res.ok, status: res.status, data };
   }
+
+  /** 包装代理任务：AbortController + 超时，完成后自动注销 */
+  function runProxy<T>(
+    task: (signal: AbortSignal) => Promise<T>,
+    sendResponse: (r: T | { ok: false; error: string }) => void,
+  ) {
+    const ctrl = new AbortController();
+    activeControllers.add(ctrl);
+    const timer = setTimeout(() => ctrl.abort(), PROXY_TIMEOUT);
+    task(ctrl.signal)
+      .then((r) => sendResponse(r))
+      .catch((err) =>
+        sendResponse({ ok: false, error: (err as Error).message }),
+      )
+      .finally(() => {
+        clearTimeout(timer);
+        activeControllers.delete(ctrl);
+      });
+  }
+
+  // 消息路由：按 _type 区分代理请求和取消信号
+  browser.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    const m = msg as { _type: string; url?: string; method?: string; headers?: Record<string, string>; body?: string };
+    if (m._type === "abort") {
+      for (const ctrl of activeControllers) ctrl.abort();
+      activeControllers.clear();
+      return;
+    }
+    if (m._type !== "proxy") return;
+    const { url, method, headers, body } = m;
+    if (!url) return;
+
+    runProxy(
+      (signal) => proxyFetch(url, { method, headers, body }, signal),
+      sendResponse,
+    );
+    return true;
+  });
 });

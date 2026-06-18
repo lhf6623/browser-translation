@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { dbgState } from "./debug";
+import { dbgState } from "./index";
 
 const collapsed = ref(false);
 </script>
@@ -9,7 +9,7 @@ const collapsed = ref(false);
   <div v-if="dbgState.enabled" id="qt-debug-panel" class="qt-skip">
     <div class="qt-dbg-title" @click="collapsed = !collapsed">
       <span>快捷翻译 Debug</span>
-      <span class="qt-dbg-toggle">{{ collapsed ? "+" : "\u2014" }}</span>
+      <span class="qt-dbg-toggle">{{ collapsed ? "+" : "—" }}</span>
     </div>
     <div v-show="!collapsed" class="qt-dbg-body">
       <div class="qt-dbg-stats">

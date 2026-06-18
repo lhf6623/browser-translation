@@ -7,11 +7,15 @@ export default defineConfig({
   manifest: {
     name: "快捷翻译",
     description: "一键整页双语对照翻译。按快捷键翻译页面所有文字，沉浸在双语阅读中。",
+    icons: {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png",
+    },
     permissions: ["activeTab", "scripting", "storage"],
     host_permissions: [
-      "https://clients5.google.com/*",
-      "https://api.mymemory.translated.net/*",
       "https://translate.googleapis.com/*",
+      "https://api.mymemory.translated.net/*",
       "https://fanyi-api.baidu.com/*",
       "https://openapi.youdao.com/*",
       "https://tmt.tencentcloudapi.com/*",

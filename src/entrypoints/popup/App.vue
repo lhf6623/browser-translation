@@ -98,7 +98,7 @@ async function clearCache() {
 
   <div class="footer">
     <a href="#" class="footer-link" @click.prevent="openShortcuts">
-      自定义快捷键
+      {{ !shortcutKeys.length ? '快捷键无效？自定义修改' : '设置快捷键' }}
     </a>
     <a href="#" class="footer-link footer-link--secondary" @click.prevent="clearCache">
       {{ cacheLabel }}

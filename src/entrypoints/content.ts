@@ -2,13 +2,14 @@
 // 入口：自动翻译 / 快捷键切换 / 滚动补译
 
 import { browser } from "wxt/browser";
-import { S, state } from "@/lib/core";
-import { memCache } from "@/lib/core";
+import { S, state } from "@/lib/state";
+import { memCache } from "@/lib/utils/cache";
 import { findBlocks } from "@/lib/scanner";
 import { doBlocks } from "@/lib/translator";
-import { removeAll } from "@/lib/insert";
 import { QtElement } from "@/lib/qtelement";
-import "@/lib/debug"; // 初始化调试面板
+import { removeAll } from "@/lib/cleanup";
+import { initDebug } from "@/lib/debug";
+initDebug();
 import "./styles.css";
 
 export default defineContentScript({
@@ -38,8 +39,11 @@ export default defineContentScript({
         return !qel.done && qel.inView;
       });
       if (!fresh.length) return;
+      const gen = ++state.generation;
       S.set("translating");
       doBlocks(fresh).then(() => {
+        if (state.generation !== gen) return;
+        if (state.cancelled) return;
         S.set("translated");
         setTimeout(scanAndTranslate, 100);
       });
@@ -80,29 +84,40 @@ export default defineContentScript({
     // 翻译流程
     // ==========================================
 
+    let _toggleTs = 0;
+
     async function toggle() {
+      // 防连按：距上次操作不足 300ms 直接忽略
+      const now = Date.now();
+      if (now - _toggleTs < 300) return;
+      _toggleTs = now;
+
       if (S.translated()) {
         removeAll();
         return;
       }
       if (S.translating()) {
         state.cancelled = true;
+        browser.runtime.sendMessage({ _type: "abort" as const }).catch(() => {});
+        removeAll();
         return;
       }
       await translatePage();
     }
 
     async function translatePage() {
+      const gen = ++state.generation;
       S.set("translating");
       state.cancelled = false;
       state.translatedEls = [];
-      sessionStorage.setItem("qt_auto", location.hostname);
 
       const all = findBlocks();
       if (!all.length) {
         S.set("");
         return;
       }
+
+      if (state.generation !== gen) return;
 
       const visible: HTMLElement[] = [];
       for (const b of all) {
@@ -112,11 +127,15 @@ export default defineContentScript({
 
       if (visible.length) await doBlocks(visible);
 
+      // 会话已被取代或取消 → 不写入状态
+      if (state.generation !== gen) return;
       if (state.cancelled) {
         removeAll();
       } else {
         S.set("translated");
         state.translatedAt = Date.now();
+        // 翻译真正完成后才记 sessionStorage，刷新 / 翻页后自动续翻
+        sessionStorage.setItem("qt_auto", location.hostname);
         if (all.length > visible.length) setTimeout(scanAndTranslate, 100);
       }
     }

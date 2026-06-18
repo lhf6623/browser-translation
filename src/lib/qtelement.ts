@@ -12,7 +12,8 @@
  * - 视口可见性
  */
 
-import { INSERT_AFTER_TAGS, CSS, inView } from "./core";
+import { INSERT_AFTER_TAGS, CSS } from "./constants";
+import { inView } from "./utils";
 
 export class QtElement {
   constructor(readonly el: HTMLElement) {}
@@ -47,7 +48,7 @@ export class QtElement {
     this.el.removeAttribute("data-qt-bl");
   }
 
-  /** 批量清除页面上所有翻译痕迹 */
+  /** 批量清除页面上所有翻译痕迹（DOM 属性 + loader） */
   static cleanupAll(): void {
     document.querySelectorAll("[data-qt], [data-qt-failed], [data-qt-bl]").forEach((e) => {
       e.removeAttribute("data-qt");

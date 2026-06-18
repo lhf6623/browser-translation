@@ -1,3 +1,5 @@
+// ========== 引擎类型定义 ==========
+
 /**
  * 每个翻译引擎的运行状态
  */
@@ -30,5 +32,22 @@ export interface EngineResult {
   rateLimited: boolean;
 }
 
-/** 翻译引擎函数签名 */
-export type TranslateFn = (text: string) => Promise<EngineResult>;
+/**
+ * 统一引擎定义：所有引擎统一走 background 代理。
+ *
+ * content script 调用 buildPayload 构建请求参数，
+ * executor 通过 sendMessage 发给 background 代为 fetch，
+ * 引擎只需关心三个问题：拼请求、解析响应、判断限流。
+ */
+export interface EngineDef {
+  /** 引擎调度名称 */
+  name: string;
+  /** 构建发给 background 的 payload（URL / 方法 / 头 / 体） */
+  buildPayload: (
+    text: string,
+  ) => Promise<Record<string, unknown>> | Record<string, unknown>;
+  /** 从 background 返回的 data 中提取译文，失败返回 null */
+  parseResponse: (data: unknown) => string | null;
+  /** 从 background 返回的 data 判断是否限流 */
+  isRateLimited: (data: unknown) => boolean;
+}

@@ -3,7 +3,7 @@
 import { reactive } from "vue";
 import { createApp } from "vue";
 import { browser } from "wxt/browser";
-import { CSS } from "./core";
+import { CSS } from "../constants";
 import DebugPanel from "./DebugPanel.vue";
 
 interface LogEntry {
@@ -39,7 +39,6 @@ function mount() {
 
 function unmount() {
   if (!_mounted) return;
-  // Vue app is attached to the container; removing it cleans up
   const el = document.querySelector("#qt-debug-panel");
   if (el) el.remove();
   _mounted = false;
@@ -76,19 +75,22 @@ export function dbgLog(
 
 // ---- 初始化：监听开关变化 ----
 
-browser.storage.onChanged.addListener((changes) => {
-  if (changes.debugEnabled) {
-    dbgState.enabled = !!changes.debugEnabled.newValue;
-    if (dbgState.enabled) {
-      mount();
-    } else {
-      unmount();
-    }
-  }
-});
+let _inited = false;
 
-(async () => {
-  const { debugEnabled } = await browser.storage.local.get("debugEnabled");
-  dbgState.enabled = !!debugEnabled;
-  if (dbgState.enabled) mount();
-})();
+export function initDebug(): void {
+  if (_inited) return;
+  _inited = true;
+
+  browser.storage.onChanged.addListener((changes) => {
+    if (changes.debugEnabled) {
+      dbgState.enabled = !!changes.debugEnabled.newValue;
+      if (dbgState.enabled) mount();
+      else unmount();
+    }
+  });
+
+  browser.storage.local.get("debugEnabled").then(({ debugEnabled }) => {
+    dbgState.enabled = !!debugEnabled;
+    if (dbgState.enabled) mount();
+  });
+}
