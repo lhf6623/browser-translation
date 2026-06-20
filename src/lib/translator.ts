@@ -55,6 +55,7 @@ async function translateText(
     engineObj.rateLimitUntil = Date.now() + 60000;
   }
   engineObj.errors++;
+  dbgLog(engineObj.name, text, true, false);
   return null;
 }
 
@@ -137,8 +138,9 @@ async function translateWorker(
   eng: EngineState,
   queue: QtElement[],
   gen: number,
-): Promise<void> {
+): Promise<boolean> {
   eng.busy = true;
+  let processedAny = false;
   try {
     while (queue.length && !state.cancelled && state.generation === gen) {
       const wait = eng.delayMs - (Date.now() - eng.lastCall);
@@ -146,15 +148,27 @@ async function translateWorker(
       if (state.cancelled || state.generation !== gen) break;
       if (eng.rateLimitUntil > Date.now()) break;
 
-      const qel = queue.shift();
+      // 从队列中找第一个未被本引擎拉黑的元素
+      let idx = -1;
+      for (let i = 0; i < queue.length; i++) {
+        if (!queue[i].isBlocked(eng.name)) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx === -1) break; // 队列中所有剩余元素都拉黑了本引擎
+
+      const qel = queue.splice(idx, 1)[0];
       if (!qel) break;
 
       eng.lastCall = Date.now();
       await tryTranslateElement(qel, eng, queue, gen);
+      processedAny = true;
     }
   } finally {
     eng.busy = false;
   }
+  return processedAny;
 }
 
 // ---- 入口 ----
@@ -184,6 +198,9 @@ export async function doBlocks(blocks: HTMLElement[]): Promise<void> {
     waitStart = 0;
 
     const workers = ready.map((eng) => translateWorker(eng, queue, gen));
-    await Promise.all(workers);
+    const results = await Promise.all(workers);
+    // 所有 worker 都没能处理任何元素（队列剩余元素全拉黑了当前就绪引擎）→ 退出
+    // 本轮未能处理的元素会在下一次 scanAndTranslate 中被重新发现
+    if (!results.some(Boolean) && queue.length > 0) break;
   }
 }

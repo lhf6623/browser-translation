@@ -33,7 +33,7 @@ export const SKIP_TAGS = new Set([
 /** 作为整体翻译的块级标签 */
 export const SCAN_UNIT_TAGS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6",
-  "LI", "BLOCKQUOTE", "FIGCAPTION",
+  "BLOCKQUOTE", "FIGCAPTION",
   "DT", "DD", "TD", "TH",
   "SUMMARY", "CAPTION", "LEGEND",
 ]);
@@ -43,5 +43,5 @@ export const SCAN_UNIT_TAGS = new Set([
 /** 译文需插入为兄弟节点（而非子节点）的标签 */
 export const INSERT_AFTER_TAGS = new Set([
   "P", "H1", "H2", "H3", "H4", "H5", "H6",
-  "BLOCKQUOTE", "FIGCAPTION", "SUMMARY",
+  "BLOCKQUOTE", "FIGCAPTION",
 ]);

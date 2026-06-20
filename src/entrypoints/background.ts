@@ -72,7 +72,13 @@ export default defineBackground(() => {
     signal: AbortSignal,
   ): Promise<{ ok: boolean; status: number; data: unknown }> {
     const res = await fetch(url, { ...init, signal });
-    const data = await res.json();
+    const text = await res.text();
+    let data: unknown = text;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      /* 非 JSON 响应（HTML 错误页等），保留原文本供 isRateLimited 检查 */
+    }
     return { ok: res.ok, status: res.status, data };
   }
 

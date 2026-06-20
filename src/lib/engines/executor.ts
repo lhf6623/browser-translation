@@ -24,7 +24,12 @@ export async function executeEngine(
     );
 
     if (!res || !res.ok) {
-      if (res?.data && def.isRateLimited(res.data)) {
+      // HTTP 429 / 403 直接判定为限流，无需引擎各自判断
+      if (
+        res?.status === 429 ||
+        res?.status === 403 ||
+        (res?.data && def.isRateLimited(res.data))
+      ) {
         return { result: null, rateLimited: true };
       }
       return { result: null, rateLimited: false };

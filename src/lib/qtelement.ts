@@ -25,11 +25,6 @@ export class QtElement {
     return this.el.hasAttribute("data-qt") || this.el.hasAttribute("data-qt-failed");
   }
 
-  /** 是否属于译文包装元素（data-qt-trans） */
-  get isTransWrapper(): boolean {
-    return this.el.hasAttribute("data-qt-trans");
-  }
-
   /** 标记为已处理，清除黑名单 */
   finish(): void {
     this.el.setAttribute("data-qt", "1");
@@ -48,7 +43,7 @@ export class QtElement {
     this.el.removeAttribute("data-qt-bl");
   }
 
-  /** 批量清除页面上所有翻译痕迹（DOM 属性 + loader） */
+  /** 批量清除页面上所有翻译痕迹（DOM 属性 + loader + 译文 span） */
   static cleanupAll(): void {
     document.querySelectorAll("[data-qt], [data-qt-failed], [data-qt-bl]").forEach((e) => {
       e.removeAttribute("data-qt");
@@ -56,6 +51,8 @@ export class QtElement {
       e.removeAttribute("data-qt-bl");
     });
     document.querySelectorAll(`.${CSS.LOADER}`).forEach((e) => e.remove());
+    // 兜底：清除未被 state.translatedEls 跟踪的孤儿译文 span
+    document.querySelectorAll(`.${CSS.TRANS}`).forEach((e) => e.remove());
   }
 
   // ====== 文本 ======
@@ -137,11 +134,9 @@ export class QtElement {
   insertTranslation(text: string): HTMLElement | null {
     try {
       if (this.done) return null;
-      this.finish();
 
       const span = document.createElement("span");
       span.className = `${CSS.TRANS} ${CSS.SKIP}`;
-      span.setAttribute("data-qt-trans", "1");
       span.textContent = text;
 
       if (this.insertAfter) {
@@ -152,6 +147,8 @@ export class QtElement {
         this.el.appendChild(span);
       }
 
+      // 插入成功后才标记 done，避免插入失败导致元素被永久跳过
+      this.finish();
       return span;
     } catch {
       return null;

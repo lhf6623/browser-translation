@@ -23,7 +23,7 @@ export function findBlocks(): HTMLElement[] {
     if (node.classList?.contains(CSS.SKIP)) continue;
 
     const qel = new QtElement(node as HTMLElement);
-    if (qel.done || qel.isTransWrapper) continue;
+    if (qel.done) continue;
 
     if (SCAN_UNIT_TAGS.has(node.tagName)) {
       const t = node.textContent?.trim() || "";

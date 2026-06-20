@@ -28,7 +28,7 @@ export default defineContentScript({
     // 滚动 / 缩放补译
     // ==========================================
 
-    function scanAndTranslate() {
+    async function scanAndTranslate() {
       if (!S.translated() || S.translating()) return;
       const all = findBlocks();
       const fresh = all.filter((b) => {
@@ -38,13 +38,23 @@ export default defineContentScript({
       if (!fresh.length) return;
       const gen = ++state.generation;
       S.set("translating");
-      doBlocks(fresh).then(() => {
+      try {
+        await doBlocks(fresh);
         if (state.generation !== gen) return;
-        if (state.cancelled) return;
-        S.set("translated");
-        // 翻译完立即再扫一次，漏掉的内容（翻译期间滚入视口的）会被补上
-        scanAndTranslate();
-      });
+        if (state.cancelled) {
+          removeAll();
+          return;
+        }
+      } catch {
+        // doBlocks 内部若出现未预期异常，确保状态不锁死
+      } finally {
+        // 无论成功、取消、异常，都要恢复到 translated 状态
+        if (state.generation === gen && !state.cancelled) {
+          S.set("translated");
+          // 翻译完立即再扫一次，漏掉的内容（翻译期间滚入视口的）会被补上
+          scanAndTranslate();
+        }
+      }
     }
 
     // 滚动 / 缩放事件防抖，翻译中则重试等待
@@ -130,19 +140,26 @@ export default defineContentScript({
         if (qel.inView) visible.push(b);
       }
 
-      if (visible.length) await doBlocks(visible);
+      try {
+        if (visible.length) await doBlocks(visible);
 
-      // 会话已被取代或取消 → 不写入状态
-      if (state.generation !== gen) return;
-      if (state.cancelled) {
-        removeAll();
-      } else {
-        S.set("translated");
-        state.translatedAt = Date.now();
-        // 翻译真正完成后才记 sessionStorage，刷新 / 翻页后自动续翻
-        sessionStorage.setItem("qt_auto", location.hostname);
-        if (all.length > visible.length) setTimeout(scanAndTranslate, 100);
+        // 会话已被取代或取消 → 不写入状态
+        if (state.generation !== gen) return;
+        if (state.cancelled) {
+          removeAll();
+          return;
+        }
+      } catch {
+        // 异常兜底，确保状态不锁死
+        if (state.generation !== gen) return;
       }
+
+      S.set("translated");
+      state.translatedAt = Date.now();
+      // 翻译真正完成后才记 sessionStorage，刷新 / 翻页后自动续翻
+      sessionStorage.setItem("qt_auto", location.hostname);
+      // 无论是否有不可见元素都补扫一次：可见元素也可能因引擎拉黑被丢弃，需重拾
+      setTimeout(scanAndTranslate, 100);
     }
   },
 });
