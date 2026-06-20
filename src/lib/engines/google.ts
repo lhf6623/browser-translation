@@ -19,8 +19,5 @@ export const googleDef: EngineDef = {
     return segments || null;
   },
 
-  isRateLimited: (data) => {
-    const d = data as { status?: number };
-    return d.status === 403 || d.status === 429;
-  },
+  isRateLimited: (_data, status) => status === 403 || status === 429,
 };

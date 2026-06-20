@@ -1,5 +1,6 @@
 import { defineConfig } from "wxt";
 import vue from "@vitejs/plugin-vue";
+import UnoCSS from "unocss/vite";
 
 export default defineConfig({
   srcDir: "src",
@@ -36,9 +37,9 @@ export default defineConfig({
     },
   },
 
-  // Vue SFC 支持
+  // Vue SFC + UnoCSS 支持
   vite: () => ({
-    plugins: [vue()],
+    plugins: [vue(), UnoCSS()],
   }),
 
   // 不自动打开浏览器

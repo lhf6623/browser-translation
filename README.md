@@ -24,11 +24,13 @@ npm run build:firefox      # Firefox
 ## 加载扩展
 
 **Chrome**：
+
 1. `npm run build`
 2. 打开 `chrome://extensions`，开启「开发者模式」
 3. 点击「加载已解压的扩展程序」，选择 `.output/chrome-mv3` 文件夹
 
 **Firefox**：
+
 1. `npm run build:firefox`
 2. 打开 `about:debugging` → 「此 Firefox」→「临时加载附加组件」
 3. 选择 `.output/firefox-mv2/manifest.json`
@@ -36,7 +38,7 @@ npm run build:firefox      # Firefox
 ## 使用
 
 | 操作 | 效果 |
-|------|------|
+| ------ | ------ |
 | `Ctrl+Shift+E` | 翻译整页 |
 | 再按一次 | 还原，移除所有译文 |
 | 同域名下翻页 | 自动续翻（sessionStorage） |
@@ -44,7 +46,7 @@ npm run build:firefox      # Firefox
 
 ## 工程结构
 
-```
+```text
 src/
 ├── entrypoints/            # WXT 入口
 │   ├── background.ts       # Service Worker: 快捷键 + 统一 CORS 代理
@@ -174,14 +176,13 @@ export const googleDef: EngineDef = {
     return arr?.[0]?.map(...).join("") || null;
   },
 
-  isRateLimited: (data) => {           // 判断是否触发频率限制
-    const d = data as { status?: number };
-    return d.status === 403 || d.status === 429;
+  isRateLimited: (_data, status) => {  // 判断限流（HTTP status + response body）
+    return status === 403 || status === 429;
   },
 };
 ```
 
-`executor.ts` 统一处理：`sendMessage` 通信 → `withTimeout` 超时 → 调用引擎的 `parseResponse` / `isRateLimited`。各引擎不关心通信细节。
+`executor.ts` 统一处理：`sendMessage` 通信 → `withTimeout` 超时 → 调用 `isRateLimited(data, status)` → `parseResponse(data)`。不包含任何引擎特定逻辑，所有错误判断（HTTP 状态码、body 错误码）由各引擎的 `isRateLimited` 自行决定。
 
 **新增引擎**只需写一个配置文件 + 在 `registry.ts` 注册一行，无需改 executor / background / translator。
 
@@ -198,9 +199,9 @@ export const googleDef: EngineDef = {
 | YD (有道) | 200 | |
 | TX (腾讯) | 200 | |
 
-- 限流检测：MM 429、GT 403/429、BD 54003、YD 411、TX LimitExceeded → 冷却 60s
-- API 超时保护：统一 8s，超时视为失败
-- 超长文本（>3000 字符）→ 按句子拆分，同引擎逐个翻译再拼接
+- **限流检测**：HTTP 状态码（429/403）+ 响应体错误码双重判断。部分 API（有道）即使是限流也返回 HTTP 200，仅通过 body errorCode 表达（YD 411、BD 54003、TX LimitExceeded）→ 冷却 60s，避免无效重试
+- **API 超时保护**：background proxy 与 executor 双重 8s 超时保护，超时视为失败
+- **超长文本**：>3000 字符按句子拆分，同引擎逐个翻译再拼接
 
 ## 翻译失败处理
 
@@ -246,50 +247,12 @@ export const googleDef: EngineDef = {
 
 通过 popup 中的开关控制显隐，状态持久化在 `chrome.storage` 中。所有调试面板 DOM 元素带有 `qt-skip` class，不会被翻译扫描器处理。
 
-### 面板布局
+## CSS 隔离
 
-```
-┌───────────────────────────────────────────────────────┐
-│  快捷翻译 Debug                                    —  │
-├───────────────────────────────────────────────────────┤
-│                                                       │
-│  请求 10    MM        GT        BD        YD        TX    缓存 4 │
-│           5(0/1/2)  2(1/0/0)  0(0/0/0)  1(0/0/0)  2(1/0/0)       │
-│                                                       │
-│  ─────────────────────────────────────────────────    │
-│  ✓  MM  Success text sample...                       │
-│  ⏱  GT  Timeout text sample...                       │
-│  ⚠  MM  Rate-limited text sample...                  │
-│  ✗  BD  Failed text sample...                        │
-│  ↻     Cache hit text sample...                      │
-│                                                       │
-└───────────────────────────────────────────────────────┘
-```
+调试面板和译文通过 content script 注入到任意网页，必须避免与宿主网站的 CSS 产生冲突：
 
-**引擎区：`请求`在前、`缓存`在后——两行：**
-
-```
-请求 10  MM 5(0/1/2)  GT 2(1/0/0)  BD 0(0/0/0)  YD 1(0/0/0)  TX 2(1/0/0)  缓存 4
-          └──┬──┘       └──┬──┘
-        ok(fail/timeout/rate)
-```
-
-其中数值颜色：
-
-| 值 | 含义 | 颜色 |
-|----|------|------|
-| `ok` | 成功 | 绿 |
-| `fail` | 其他失败（网络/API内部错） | 红 |
-| `timeout` | 超时 | 黄 |
-| `rate` | 限流 | 橙 |
-
-**日志行前缀：**
-
-| 符号 | 含义 | 颜色 |
-|------|------|------|
-| `✓` | 成功 | 绿 |
-| `✗` | 其他失败（网络/API内部错/build） | 红 |
-| `⏱` | 超时 | 黄 |
-| `⚠` | 限流 | 橙 |
-| `↻` | 缓存命中 | 橙 |
-
+| 策略 | 说明 |
+| ------ | ------ |
+| **`qt-` 前缀** | UnoCSS 生成的所有工具类均带 `qt-` 前缀（`qt-fixed`、`qt-bg-bg`、`qt-debug-shadow`），不会与宿主网站的 Tailwind/UnoCSS 类名冲突 |
+| **`rem` → `px`** | `@unocss/preset-rem-to-px` 将所有 `rem` 转 `px`，尺寸不受宿主网站 `html { font-size }` 影响 |
+| **译文自适应** | `.qt-trans` 使用 `mix-blend-mode: difference` 自动反色 + `box-decoration-break: clone` 保证换行时圆角不断裂 |

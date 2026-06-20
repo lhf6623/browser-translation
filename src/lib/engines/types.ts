@@ -30,6 +30,8 @@ export interface EngineResult {
   result: string | null;
   /** 是否触发了频率限制 */
   rateLimited: boolean;
+  /** 失败分类 */
+  errorType?: 'timeout' | 'ratelimit' | 'network' | 'build';
 }
 
 /**
@@ -48,6 +50,6 @@ export interface EngineDef {
   ) => Promise<Record<string, unknown>> | Record<string, unknown>;
   /** 从 background 返回的 data 中提取译文，失败返回 null */
   parseResponse: (data: unknown) => string | null;
-  /** 从 background 返回的 data 判断是否限流 */
-  isRateLimited: (data: unknown) => boolean;
+  /** 从 background 返回的 data + HTTP status 判断是否限流 */
+  isRateLimited: (data: unknown, status: number) => boolean;
 }

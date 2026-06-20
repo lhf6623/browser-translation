@@ -10,6 +10,7 @@ import { QtElement } from "@/lib/qtelement";
 import { removeAll } from "@/lib/cleanup";
 import { initDebug } from "@/lib/debug";
 initDebug();
+import "uno.css";
 import "./styles.css";
 
 export default defineContentScript({

@@ -6,23 +6,32 @@ import { browser } from "wxt/browser";
 import { CSS } from "../constants";
 import DebugPanel from "./DebugPanel.vue";
 
+type LogStatus = '' | 'ok' | 'fail' | 'cache';
+
 interface LogEntry {
   engine: string;
   text: string;
-  fail: boolean;
-  cache: boolean;
+  status: LogStatus;
 }
+
+interface EngineStats {
+  ok: number;
+  fail: number;
+}
+
+const makeStats = (): EngineStats => ({ ok: 0, fail: 0 });
 
 export const dbgState = reactive({
   enabled: false,
   total: 0,
-  mymemory: 0,
-  google: 0,
-  baidu: 0,
-  youdao: 0,
-  tencent: 0,
-  fail: 0,
   cacheHit: 0,
+  engines: {
+    MM: makeStats(),
+    GT: makeStats(),
+    BD: makeStats(),
+    YD: makeStats(),
+    TX: makeStats(),
+  } as Record<string, EngineStats>,
   logs: [] as LogEntry[],
 });
 
@@ -67,29 +76,20 @@ function unmount() {
 export function dbgLog(
   engine: string,
   text: string,
-  fail: boolean,
-  cache: boolean,
+  status?: 'fail' | 'cache',
 ): void {
   mount();
-  if (cache) {
+  if (status === 'cache') {
     dbgState.cacheHit++;
   } else {
     dbgState.total++;
-    if (fail) {
-      dbgState.fail++;
-    } else if (engine === "MM") {
-      dbgState.mymemory++;
-    } else if (engine === "GT") {
-      dbgState.google++;
-    } else if (engine === "BD") {
-      dbgState.baidu++;
-    } else if (engine === "YD") {
-      dbgState.youdao++;
-    } else if (engine === "TX") {
-      dbgState.tencent++;
+    const s = dbgState.engines[engine];
+    if (s) {
+      if (status === 'fail') s.fail++;
+      else s.ok++;
     }
   }
-  dbgState.logs.unshift({ engine, text, fail, cache });
+  dbgState.logs.unshift({ engine, text, status: status || '' });
   if (dbgState.logs.length > 8) dbgState.logs.length = 8;
 }
 

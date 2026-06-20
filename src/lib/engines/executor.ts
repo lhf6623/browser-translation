@@ -15,29 +15,37 @@ export async function executeEngine(
   text: string,
   def: EngineDef,
 ): Promise<EngineResult> {
+  let payload: Record<string, unknown>;
   try {
-    const payload = await def.buildPayload(text);
+    payload = await def.buildPayload(text);
+  } catch {
+    return { result: null, rateLimited: false, errorType: 'build' };
+  }
 
+  try {
     const res = await withTimeout(
       browser.runtime.sendMessage({ _type: "proxy", ...payload }),
       API_TIMEOUT_MS,
     );
 
+    // 限流检测：统一交给引擎判断，各引擎自行决定依据
+    // HTTP 状态码（MM/GT）或 body 错误码（BD/YD/TX）或两者结合
+    if (res && def.isRateLimited(res.data, res.status)) {
+      return { result: null, rateLimited: true, errorType: 'ratelimit' };
+    }
+
     if (!res || !res.ok) {
-      // HTTP 429 / 403 直接判定为限流，无需引擎各自判断
-      if (
-        res?.status === 429 ||
-        res?.status === 403 ||
-        (res?.data && def.isRateLimited(res.data))
-      ) {
-        return { result: null, rateLimited: true };
-      }
-      return { result: null, rateLimited: false };
+      return { result: null, rateLimited: false, errorType: 'network' };
     }
 
     const result = def.parseResponse(res.data);
     return { result, rateLimited: false };
-  } catch {
-    return { result: null, rateLimited: false };
+  } catch (err) {
+    const isTimeout = (err as Error).message === 'timeout';
+    return {
+      result: null,
+      rateLimited: false,
+      errorType: isTimeout ? 'timeout' : 'network',
+    };
   }
 }

@@ -17,8 +17,5 @@ export const myMemoryDef: EngineDef = {
     return null;
   },
 
-  isRateLimited: (data) => {
-    const d = data as { status?: number };
-    return d.status === 429;
-  },
+  isRateLimited: (_data, status) => status === 429,
 };

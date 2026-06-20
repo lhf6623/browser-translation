@@ -58,9 +58,11 @@ function md5(s: string): string {
   }
 
   // 主流程
-  const st = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
   const len = s.length;
-  const padded: number[] = [];
+  // 预分配填充数组：ceil((len+8)/64) 个 64 字节块 × 16 个 32-bit 字
+  const blockCount = ((len + 8) >> 6) + 1;
+  const paddedLen = blockCount << 4;
+  const padded = new Array<number>(paddedLen).fill(0);
 
   for (let i = 0; i < len; i += 4) {
     padded[i >> 2] =
@@ -69,12 +71,12 @@ function md5(s: string): string {
       ((s.charCodeAt(i + 2) || 0) << 16) |
       ((s.charCodeAt(i + 3) || 0) << 24);
   }
-  padded[len >> 2] = 0x80 << ((len % 4) << 3);
-  padded.fill(0, (len >> 2) + 1, (((len + 8) >> 6) + 1) << 4);
-  padded[padded.length - 2] = len * 8 & 0xffffffff;
-  padded[padded.length - 1] = Math.floor(len / 0x20000000);
+  padded[len >> 2] |= 0x80 << ((len % 4) << 3);
+  padded[paddedLen - 2] = (len * 8) & 0xffffffff;
+  padded[paddedLen - 1] = Math.floor(len / 0x20000000);
 
-  for (let i = 0; i < padded.length; i += 16) {
+  const st = [0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476];
+  for (let i = 0; i < paddedLen; i += 16) {
     processBlock(padded.slice(i, i + 16), st);
   }
 

@@ -25,7 +25,7 @@ async function translateText(
   const key = hashKey(text);
 
   if (memCache.has(key)) {
-    dbgLog("", text, false, true);
+    dbgLog("", text, 'cache');
     return memCache.get(key)!;
   }
 
@@ -33,7 +33,7 @@ async function translateText(
   const cached = stored[key] as string | undefined;
   if (cached) {
     memCache.set(key, cached);
-    dbgLog("", text, false, true);
+    dbgLog("", text, 'cache');
     return cached;
   }
 
@@ -47,7 +47,7 @@ async function translateText(
     const cleaned = cleanHtml(r.result);
     memCache.set(key, cleaned);
     browser.storage.local.set({ [key]: cleaned }).catch(() => {});
-    dbgLog(engineObj.name, text, false, false);
+    dbgLog(engineObj.name, text);
     return cleaned;
   }
 
@@ -55,7 +55,7 @@ async function translateText(
     engineObj.rateLimitUntil = Date.now() + 60000;
   }
   engineObj.errors++;
-  dbgLog(engineObj.name, text, true, false);
+  dbgLog(engineObj.name, text, 'fail');
   return null;
 }
 
