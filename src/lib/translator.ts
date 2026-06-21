@@ -39,7 +39,7 @@ async function translateText(
 
   const t0 = Date.now();
   const def = getEngineDef(engineObj.name);
-  const r = await executeEngine(text, def);
+  const r = await executeEngine([text], def);
   engineObj.sumMs += Date.now() - t0;
   engineObj.calls++;
 
@@ -87,7 +87,6 @@ async function tryTranslateElement(
   qel: QtElement,
   eng: EngineState,
   queue: QtElement[],
-  gen: number,
 ): Promise<void> {
   if (qel.isBlocked(eng.name)) {
     if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
@@ -107,8 +106,8 @@ async function tryTranslateElement(
   qel.showLoader();
   try {
     const result = await translateCore(parts.core, eng);
-    // 当前会话已取消或已被新一轮翻译取代 → 丢弃结果
-    if (state.cancelled || state.generation !== gen) return;
+    // 用户取消 → 丢弃结果
+    if (state.cancelled) return;
 
     if (result) {
       const span = qel.insertTranslation(parts.prefix + result + parts.suffix);
@@ -119,7 +118,7 @@ async function tryTranslateElement(
       else queue.push(qel);
     }
   } catch {
-    if (state.generation !== gen) return;
+    // 异常时仍要拉黑引擎，不让下一轮又浪费调用
     qel.addBlock(eng.name);
     if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
     else queue.push(qel);
@@ -156,13 +155,13 @@ async function translateWorker(
           break;
         }
       }
-      if (idx === -1) break; // 队列中所有剩余元素都拉黑了本引擎
+      if (idx === -1) break;
 
       const qel = queue.splice(idx, 1)[0];
       if (!qel) break;
 
       eng.lastCall = Date.now();
-      await tryTranslateElement(qel, eng, queue, gen);
+      await tryTranslateElement(qel, eng, queue);
       processedAny = true;
     }
   } finally {
@@ -199,8 +198,6 @@ export async function doBlocks(blocks: HTMLElement[]): Promise<void> {
 
     const workers = ready.map((eng) => translateWorker(eng, queue, gen));
     const results = await Promise.all(workers);
-    // 所有 worker 都没能处理任何元素（队列剩余元素全拉黑了当前就绪引擎）→ 退出
-    // 本轮未能处理的元素会在下一次 scanAndTranslate 中被重新发现
     if (!results.some(Boolean) && queue.length > 0) break;
   }
 }

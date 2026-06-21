@@ -95,22 +95,21 @@ function md5(s: string): string {
 export const baiduDef: EngineDef = {
   name: "BD",
 
-  buildPayload: (text) => {
+  buildPayload: (texts) => {
+    const q = texts.join("\n");
     const salt = Date.now().toString();
-    const sign = md5(BD_APPID + text + salt + BD_KEY);
+    const sign = md5(BD_APPID + q + salt + BD_KEY);
     const url =
       `https://fanyi-api.baidu.com/api/trans/vip/translate` +
-      `?q=${encodeURIComponent(text)}&from=en&to=zh` +
+      `?q=${encodeURIComponent(q)}&from=en&to=zh` +
       `&appid=${BD_APPID}&salt=${salt}&sign=${sign}`;
     return { url };
   },
 
   parseResponse: (data) => {
     const d = data as { trans_result?: { dst: string }[] };
-    if (d.trans_result?.[0]?.dst) {
-      return d.trans_result.map((r) => r.dst).join("");
-    }
-    return null;
+    if (!d.trans_result) return [];
+    return d.trans_result.map((r) => r.dst);
   },
 
   isRateLimited: (data) => {

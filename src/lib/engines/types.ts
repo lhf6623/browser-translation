@@ -35,21 +35,25 @@ export interface EngineResult {
 }
 
 /**
- * 统一引擎定义：所有引擎统一走 background 代理。
+ * 统一引擎定义 — 所有引擎统一走 background 代理。
  *
- * content script 调用 buildPayload 构建请求参数，
- * executor 通过 sendMessage 发给 background 代为 fetch，
- * 引擎只需关心三个问题：拼请求、解析响应、判断限流。
+ * buildPayload 统一收 string[]，引擎自己决定是否合并为批量请求。
+ * parseResponse 统一回 (string | null)[]，按输入顺序一一对应。
+ *
+ * 当前各引擎实际处理方式：
+ * - MM / GT / TX：只取 texts[0]，返回单元素数组
+ * - BD：\n 拼接为单一 q，一次请求，返回逐条 dst
+ * - YD：多 q 字段，/v2/api 请求，返回逐条 translation
  */
 export interface EngineDef {
   /** 引擎调度名称 */
   name: string;
-  /** 构建发给 background 的 payload（URL / 方法 / 头 / 体） */
+  /** 构建发给 background 的 payload */
   buildPayload: (
-    text: string,
+    texts: string[],
   ) => Promise<Record<string, unknown>> | Record<string, unknown>;
-  /** 从 background 返回的 data 中提取译文，失败返回 null */
-  parseResponse: (data: unknown) => string | null;
-  /** 从 background 返回的 data + HTTP status 判断是否限流 */
+  /** 解析响应，结果按 texts 顺序一一对应，失败位置填 null */
+  parseResponse: (data: unknown) => (string | null)[];
+  /** 从 response data + HTTP status 判断是否限流 */
   isRateLimited: (data: unknown, status: number) => boolean;
 }

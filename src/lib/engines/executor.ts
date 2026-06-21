@@ -5,21 +5,23 @@
 import { browser } from "wxt/browser";
 import type { EngineDef, EngineResult } from "./types";
 import { API_TIMEOUT_MS } from "../constants";
-import { withTimeout } from "../utils";
+import { withTimeout, cleanHtml } from "../utils";
+import { memCache, hashKey } from "../utils/cache";
 
 /**
- * 执行引擎翻译：统一发消息给 background，由 background 代为 fetch。
- * 引擎只需声明 payload（URL/方法/头/体），executor 负责通信与超时。
+ * 执行引擎翻译 — 统一走 background proxy。
+ * buildPayload 接收 string[]，引擎自行决定单条还是合并。
+ * 返回单个 EngineResult（取 results[0]）。
  */
 export async function executeEngine(
-  text: string,
+  texts: string[],
   def: EngineDef,
 ): Promise<EngineResult> {
   let payload: Record<string, unknown>;
   try {
-    payload = await def.buildPayload(text);
+    payload = await def.buildPayload(texts);
   } catch {
-    return { result: null, rateLimited: false, errorType: 'build' };
+    return { result: null, rateLimited: false, errorType: "build" };
   }
 
   try {
@@ -28,24 +30,53 @@ export async function executeEngine(
       API_TIMEOUT_MS,
     );
 
-    // 限流检测：统一交给引擎判断，各引擎自行决定依据
-    // HTTP 状态码（MM/GT）或 body 错误码（BD/YD/TX）或两者结合
     if (res && def.isRateLimited(res.data, res.status)) {
-      return { result: null, rateLimited: true, errorType: 'ratelimit' };
+      return { result: null, rateLimited: true, errorType: "ratelimit" };
     }
 
     if (!res || !res.ok) {
-      return { result: null, rateLimited: false, errorType: 'network' };
+      return { result: null, rateLimited: false, errorType: "network" };
     }
 
-    const result = def.parseResponse(res.data);
-    return { result, rateLimited: false };
+    const results = def.parseResponse(res.data);
+    const first = results[0] ?? null;
+    return { result: first, rateLimited: false };
   } catch (err) {
-    const isTimeout = (err as Error).message === 'timeout';
+    const isTimeout = (err as Error).message === "timeout";
     return {
       result: null,
       rateLimited: false,
-      errorType: isTimeout ? 'timeout' : 'network',
+      errorType: isTimeout ? "timeout" : "network",
     };
   }
+}
+
+/**
+ * 批量调用 executeEngine 逐条翻译，带缓存。
+ * 引擎 buildPayload 已支持 string[]，此处逐条调用。
+ */
+export async function executeEngineBatch(
+  texts: string[],
+  def: EngineDef,
+): Promise<EngineResult[]> {
+  const results: EngineResult[] = [];
+
+  for (const text of texts) {
+    const key = hashKey(text);
+    if (memCache.has(key)) {
+      results.push({ result: memCache.get(key)!, rateLimited: false });
+      continue;
+    }
+
+    const r = await executeEngine([text], def);
+    if (r.result) {
+      const cleaned = cleanHtml(r.result);
+      memCache.set(key, cleaned);
+      results.push({ result: cleaned, rateLimited: false });
+    } else {
+      results.push(r);
+    }
+  }
+
+  return results;
 }

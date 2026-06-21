@@ -11,12 +11,18 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "wxt build --mode development",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.7",
+    "@vitest/coverage-v8": "^4.1.9",
+    "dotenv": "^17.4.2",
+    "jsdom": "^29.1.1",
     "typescript": "^6.0.3",
     "unocss": "^66.7.2",
+    "vitest": "^4.1.9",
     "wxt": "^0.20.0"
   },
   "dependencies": {

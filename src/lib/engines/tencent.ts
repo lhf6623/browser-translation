@@ -39,14 +39,14 @@ async function hmac256hex(
 export const tencentDef: EngineDef = {
   name: "TX",
 
-  buildPayload: async (text) => {
+  buildPayload: async (texts) => {
     const host = "tmt.tencentcloudapi.com";
     const service = "tmt";
     const timestamp = Math.floor(Date.now() / 1000);
     const date = new Date(timestamp * 1000).toISOString().slice(0, 10);
 
     const body = JSON.stringify({
-      SourceText: text,
+      SourceText: texts[0] ?? "",
       Source: "en",
       Target: "zh",
       ProjectId: 0,
@@ -84,8 +84,8 @@ export const tencentDef: EngineDef = {
   parseResponse: (data) => {
     const d = data as { Response?: { TargetText?: string; Error?: { Code?: string } } };
     const r = d.Response;
-    if (!r || r.Error) return null;
-    return r.TargetText ?? null;
+    if (!r || r.Error) return [null];
+    return [r.TargetText ?? null];
   },
 
   isRateLimited: (data) => {
