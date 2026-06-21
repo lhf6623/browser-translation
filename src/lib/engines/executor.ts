@@ -5,8 +5,7 @@
 import { browser } from "wxt/browser";
 import type { EngineDef, EngineResult } from "./types";
 import { API_TIMEOUT_MS } from "../constants";
-import { withTimeout, cleanHtml } from "../utils";
-import { memCache, hashKey } from "../utils/cache";
+import { withTimeout } from "../utils";
 
 /**
  * 执行引擎翻译 — 统一走 background proxy。
@@ -51,32 +50,3 @@ export async function executeEngine(
   }
 }
 
-/**
- * 批量调用 executeEngine 逐条翻译，带缓存。
- * 引擎 buildPayload 已支持 string[]，此处逐条调用。
- */
-export async function executeEngineBatch(
-  texts: string[],
-  def: EngineDef,
-): Promise<EngineResult[]> {
-  const results: EngineResult[] = [];
-
-  for (const text of texts) {
-    const key = hashKey(text);
-    if (memCache.has(key)) {
-      results.push({ result: memCache.get(key)!, rateLimited: false });
-      continue;
-    }
-
-    const r = await executeEngine([text], def);
-    if (r.result) {
-      const cleaned = cleanHtml(r.result);
-      memCache.set(key, cleaned);
-      results.push({ result: cleaned, rateLimited: false });
-    } else {
-      results.push(r);
-    }
-  }
-
-  return results;
-}
