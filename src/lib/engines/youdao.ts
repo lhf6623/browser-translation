@@ -16,7 +16,6 @@ export const youdaoDef: EngineDef = {
   name: "YD",
 
   buildPayload: async (texts) => {
-  console.log(`texts:`, texts);
     const salt = crypto.randomUUID();
     const curtime = String(Math.floor(Date.now() / 1000));
     // 批量翻译：所有 q 拼接后 truncate 再签名
@@ -43,7 +42,6 @@ export const youdaoDef: EngineDef = {
   },
 
   parseResponse: (data) => {
-  console.log(`data:`, data);
     const d = data as {
       errorCode?: string;
       errorIndex?: number[];

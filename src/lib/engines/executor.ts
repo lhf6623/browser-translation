@@ -28,7 +28,6 @@ export async function executeEngine(
       browser.runtime.sendMessage({ _type: "proxy", ...payload }),
       API_TIMEOUT_MS,
     );
-    console.log(`name`, def.name);
 
     if (res && def.isRateLimited(res.data, res.status)) {
       return { results: texts.map(() => null), rateLimited: true, errorType: "ratelimit" };
