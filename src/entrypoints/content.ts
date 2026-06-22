@@ -8,8 +8,9 @@ import { findBlocks } from "@/lib/scanner";
 import { doBlocks } from "@/lib/translator";
 import { QtElement } from "@/lib/qtelement";
 import { removeAll } from "@/lib/cleanup";
-import { initDebug } from "@/lib/debug";
-initDebug();
+if (import.meta.env.DEV) {
+  import("@/lib/debug").then((m) => m.initDebug());
+}
 import "uno.css";
 import "./styles.css";
 
