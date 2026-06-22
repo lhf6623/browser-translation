@@ -10,7 +10,7 @@ describe("有道 — buildPayload", () => {
   it("构建 POST 请求，含全部必填字段", async () => {
     const p = (await youdaoDef.buildPayload(["hello"])) as unknown as Payload;
 
-    expect(p.url).toBe("https://openapi.youdao.com/api");
+    expect(p.url).toBe("https://openapi.youdao.com/v2/api");
     expect(p.method).toBe("POST");
     expect(p.headers?.["Content-Type"]).toBe("application/x-www-form-urlencoded");
 
@@ -40,13 +40,29 @@ describe("有道 — buildPayload", () => {
 
 describe("有道 — parseResponse", () => {
   it("正常提取译文", () => {
-    const data = { errorCode: "0", translation: ["你好"] };
+    const data = {
+      errorCode: "0",
+      translateResults: [{ query: "hello", translation: "你好" }],
+    };
     expect(youdaoDef.parseResponse(data)).toEqual(["你好"]);
   });
 
-  it("无 translation 返回 [null]", () => {
-    expect(youdaoDef.parseResponse({ errorCode: "0" })).toEqual([null]);
-    expect(youdaoDef.parseResponse({ errorCode: "0", translation: [] })).toEqual([null]);
+  it("无 translateResults 返回 []", () => {
+    expect(youdaoDef.parseResponse({ errorCode: "0" })).toEqual([]);
+    expect(youdaoDef.parseResponse({ errorCode: "0", translateResults: [] })).toEqual([]);
+  });
+
+  it("errorIndex 标记的项返回 null", () => {
+    const data = {
+      errorCode: "0",
+      errorIndex: [1],
+      translateResults: [
+        { query: "a", translation: "A" },
+        { query: "b", translation: "B" },
+        { query: "c", translation: "C" },
+      ],
+    };
+    expect(youdaoDef.parseResponse(data)).toEqual(["A", null, "C"]);
   });
 
   it("意外格式不抛异常", () => {

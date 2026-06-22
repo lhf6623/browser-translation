@@ -26,8 +26,8 @@ export interface EngineState {
  * 翻译引擎单次调用的返回结果
  */
 export interface EngineResult {
-  /** 翻译结果文本，失败时为 null */
-  result: string | null;
+  /** 翻译结果数组，按输入顺序一一对应，失败位置填 null */
+  results: (string | null)[];
   /** 是否触发了频率限制 */
   rateLimited: boolean;
   /** 失败分类 */
@@ -56,4 +56,10 @@ export interface EngineDef {
   parseResponse: (data: unknown) => (string | null)[];
   /** 从 response data + HTTP status 判断是否限流 */
   isRateLimited: (data: unknown, status: number) => boolean;
+  /**
+   * 计算该引擎单次 API 请求允许的最大文本条数。
+   * 入参为当前已收集的待翻译文本，引擎可根据总字符数等限制动态调整。
+   * 返回 1 表示不支持批量。
+   */
+  maxBatchSize: (texts: string[]) => number;
 }

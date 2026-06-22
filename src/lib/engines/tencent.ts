@@ -2,38 +2,23 @@
 
 import type { EngineDef } from "./types";
 import { TX_SECRET_ID, TX_SECRET_KEY } from "../config";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { hmac } from "@noble/hashes/hmac.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 
-async function hex256(s: string): Promise<string> {
-  const buf = new TextEncoder().encode(s);
-  const hash = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(hash as ArrayBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+const encoder = new TextEncoder();
+
+function hex256(s: string): string {
+  return bytesToHex(sha256(encoder.encode(s)));
 }
 
-async function hmac256(
-  key: string | Uint8Array,
-  msg: string,
-): Promise<Uint8Array> {
-  const k = await crypto.subtle.importKey(
-    "raw",
-    (typeof key === "string" ? new TextEncoder().encode(key) : key) as BufferSource,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(msg));
-  return new Uint8Array(sig);
+function hmac256(key: string | Uint8Array, msg: string): Uint8Array {
+  const keyBytes = typeof key === "string" ? encoder.encode(key) : key;
+  return hmac(sha256, keyBytes, encoder.encode(msg));
 }
 
-async function hmac256hex(
-  key: string | Uint8Array,
-  msg: string,
-): Promise<string> {
-  const sig = await hmac256(key, msg);
-  return Array.from(sig)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+function hmac256hex(key: string | Uint8Array, msg: string): string {
+  return bytesToHex(hmac256(key, msg));
 }
 
 export const tencentDef: EngineDef = {
@@ -52,17 +37,17 @@ export const tencentDef: EngineDef = {
       ProjectId: 0,
     });
 
-    const hp = await hex256(body);
+    const hp = hex256(body);
     const ch = `content-type:application/json\nhost:${host}\n`;
     const cr = `POST\n/\n\n${ch}\ncontent-type;host\n${hp}`;
-    const hr = await hex256(cr);
+    const hr = hex256(cr);
     const cs = `${date}/${service}/tc3_request`;
     const sts = `TC3-HMAC-SHA256\n${timestamp}\n${cs}\n${hr}`;
 
-    const sd = await hmac256("TC3" + TX_SECRET_KEY, date);
-    const ss = await hmac256(sd, service);
-    const ssk = await hmac256(ss, "tc3_request");
-    const sig = await hmac256hex(ssk, sts);
+    const sd = hmac256("TC3" + TX_SECRET_KEY, date);
+    const ss = hmac256(sd, service);
+    const ssk = hmac256(ss, "tc3_request");
+    const sig = hmac256hex(ssk, sts);
     const auth = `TC3-HMAC-SHA256 Credential=${TX_SECRET_ID}/${cs}, SignedHeaders=content-type;host, Signature=${sig}`;
 
     return {
@@ -93,4 +78,7 @@ export const tencentDef: EngineDef = {
     const code = d.Response?.Error?.Code;
     return code === "LimitExceeded" || code === "RequestLimitExceeded";
   },
+
+  // 腾讯 API 不支持批量，每次只发送 texts[0]
+  maxBatchSize: () => 1,
 };

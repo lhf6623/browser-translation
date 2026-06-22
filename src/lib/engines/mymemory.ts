@@ -18,4 +18,7 @@ export const myMemoryDef: EngineDef = {
   },
 
   isRateLimited: (_data, status) => status === 429,
+
+  // MyMemory 免费端点不支持批量
+  maxBatchSize: () => 1,
 };

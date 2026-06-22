@@ -10,7 +10,7 @@ import { withTimeout } from "../utils";
 /**
  * 执行引擎翻译 — 统一走 background proxy。
  * buildPayload 接收 string[]，引擎自行决定单条还是合并。
- * 返回单个 EngineResult（取 results[0]）。
+ * parseResponse 返回 (string | null)[]，按输入顺序一一对应。
  */
 export async function executeEngine(
   texts: string[],
@@ -20,7 +20,7 @@ export async function executeEngine(
   try {
     payload = await def.buildPayload(texts);
   } catch {
-    return { result: null, rateLimited: false, errorType: "build" };
+    return { results: texts.map(() => null), rateLimited: false, errorType: "build" };
   }
 
   try {
@@ -28,22 +28,22 @@ export async function executeEngine(
       browser.runtime.sendMessage({ _type: "proxy", ...payload }),
       API_TIMEOUT_MS,
     );
+    console.log(`name`, def.name);
 
     if (res && def.isRateLimited(res.data, res.status)) {
-      return { result: null, rateLimited: true, errorType: "ratelimit" };
+      return { results: texts.map(() => null), rateLimited: true, errorType: "ratelimit" };
     }
 
     if (!res || !res.ok) {
-      return { result: null, rateLimited: false, errorType: "network" };
+      return { results: texts.map(() => null), rateLimited: false, errorType: "network" };
     }
 
     const results = def.parseResponse(res.data);
-    const first = results[0] ?? null;
-    return { result: first, rateLimited: false };
+    return { results, rateLimited: false };
   } catch (err) {
     const isTimeout = (err as Error).message === "timeout";
     return {
-      result: null,
+      results: texts.map(() => null),
       rateLimited: false,
       errorType: isTimeout ? "timeout" : "network",
     };

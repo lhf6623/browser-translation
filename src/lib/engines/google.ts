@@ -20,4 +20,7 @@ export const googleDef: EngineDef = {
   },
 
   isRateLimited: (_data, status) => status === 403 || status === 429,
+
+  // Google 免费端点不支持批量
+  maxBatchSize: () => 1,
 };

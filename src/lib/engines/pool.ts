@@ -9,8 +9,8 @@ import type { EngineState } from "./types";
 export const engines: EngineState[] = [
   { name: "MM", lastCall: 0, delayMs: 100, busy: false, rateLimitUntil: 0, calls: 0, errors: 0, sumMs: 0 },
   { name: "GT", lastCall: 0, delayMs: 500, busy: false, rateLimitUntil: 0, calls: 0, errors: 0, sumMs: 0 },
-  { name: "BD", lastCall: 0, delayMs: 1000, busy: false, rateLimitUntil: 0, calls: 0, errors: 0, sumMs: 0 },
-  { name: "YD", lastCall: 0, delayMs: 200, busy: false, rateLimitUntil: 0, calls: 0, errors: 0, sumMs: 0 },
+  { name: "BD", lastCall: 0, delayMs: 600, busy: false, rateLimitUntil: 0, calls: 0, errors: 0, sumMs: 0 },
+  { name: "YD", lastCall: 0, delayMs: 600, busy: false, rateLimitUntil: 0, calls: 0, errors: 0, sumMs: 0 },
   { name: "TX", lastCall: 0, delayMs: 200, busy: false, rateLimitUntil: 0, calls: 0, errors: 0, sumMs: 0 },
 ];
 
