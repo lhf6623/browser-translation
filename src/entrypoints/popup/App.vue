@@ -2,6 +2,8 @@
 import { ref, onMounted } from "vue";
 import { browser } from "wxt/browser";
 
+const isDev = import.meta.env.DEV;
+
 const SHORTCUT_URL =
   import.meta.env.BROWSER === "firefox"
     ? "about:addons"
@@ -29,17 +31,19 @@ function openShortcuts() {
   browser.tabs.create({ url: SHORTCUT_URL });
 }
 
-// ---- 调试开关 ----
+// ---- 调试开关 — 仅开发阶段生效 ----
 
 const debugEnabled = ref(false);
 
-onMounted(async () => {
-  const { debugEnabled: stored } = await browser.storage.local.get("debugEnabled");
-  debugEnabled.value = !!stored;
-});
+if (import.meta.env.DEV) {
+  onMounted(async () => {
+    const { debugEnabled: stored } = await browser.storage.local.get("debugEnabled");
+    debugEnabled.value = !!stored;
+  });
+}
 
 function toggleDebug(val: boolean) {
-  browser.storage.local.set({ debugEnabled: val });
+  if (import.meta.env.DEV) browser.storage.local.set({ debugEnabled: val });
 }
 
 // ---- 清空缓存 ----
@@ -89,8 +93,8 @@ async function clearCache() {
     <div class="qt-text-[12px] qt-text-[#999] qt-mt-2.5">按一次翻译，再按一次还原</div>
   </div>
 
-  <!-- debug toggle -->
-  <div class="qt-flex qt-items-center qt-justify-between qt-mx-5 qt-py-2.5 qt-px-3.5 qt-rounded-[10px] qt-bg-white qt-border qt-border-[#efece5] hover:qt-border-brand/15 qt-transition-colors qt-duration-200">
+  <!-- debug toggle — 仅开发阶段可见 -->
+   <div v-if="isDev" class="qt-flex qt-items-center qt-justify-between qt-mx-5 qt-py-2.5 qt-px-3.5 qt-rounded-[10px] qt-bg-white qt-border qt-border-[#efece5] hover:qt-border-brand/15 qt-transition-colors qt-duration-200">
     <span class="qt-text-[12px] qt-text-[#86868b]">调试面板</span>
     <label class="switch qt-relative qt-w-10 qt-h-[23px] qt-shrink-0">
       <input type="checkbox" :checked="debugEnabled" @change="toggleDebug(($event.target as HTMLInputElement).checked)" />

@@ -84,8 +84,6 @@ export default defineContentScript({
     function scheduleScan(timerRef: {
       current: ReturnType<typeof setTimeout> | null;
     }): void {
-      if (Date.now() - state.translatedAt < 1000) return;
-
       if (!_debounceStart) _debounceStart = Date.now();
 
       // 持续滚动超过 2s 上限，不管还在不在滚都触发

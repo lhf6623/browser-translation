@@ -106,11 +106,18 @@ async function tryTranslateBatch(
   const tasks: Task[] = [];
 
   // 1. 预检查：拉黑、视口、提取核心文本
+  // 注意：不满足当前引擎条件的元素推回队列，避免被该引擎“吞掉”
   for (const qel of batch) {
     if (qel.isBlocked(eng.name)) {
-      if (engines.every((e) => qel.isBlocked(e.name))) qel.markFailed();
+      if (engines.every((e) => qel.isBlocked(e.name))) {
+        qel.markFailed();
+      } else {
+        queue.push(qel);
+      }
       continue;
     }
+    // 不可见元素直接跳过：push 回队列会导致反复取出-检查-推回的死循环
+    // 下次 scanAndTranslate → findBlocks 会自然重新发现它们
     if (!qel.inView) continue;
 
     const parts = qel.extractCore();
@@ -221,6 +228,7 @@ async function tryTranslateBatch(
 /**
  * 引擎自治 worker：循环从队列取元素，完成一批立刻检查下一批。
  * 遵守 delayMs 间隔，限流自愈，无同步屏障。
+ * 队列为空时不立即退出——等待其他 worker 可能推回元素。
  */
 async function autoWorker(
   eng: EngineState,
@@ -231,7 +239,16 @@ async function autoWorker(
   try {
     while (true) {
       if (state.cancelled || state.generation !== gen) return;
-      if (!queue.length) return;
+
+      // 队列为空 → 等一等其他正在调 API 的 worker（失败后可能退回元素）
+      if (!queue.length) {
+        eng.busy = false;
+        await sleep(200);
+        eng.busy = true;
+        const anyBusy = engines.some((e) => e !== eng && e.busy);
+        if (!anyBusy) return;
+        continue;
+      }
 
       const wait = eng.delayMs - (Date.now() - eng.lastCall);
       if (wait > 0) await sleep(wait);
@@ -252,6 +269,13 @@ async function autoWorker(
       }
 
       if (batch.length === 0) {
+        // 队列里所有元素都被当前引擎拉黑 → 清理全局拉黑元素，然后等待
+        for (let i = queue.length - 1; i >= 0; i--) {
+          if (engines.every((e) => queue[i].isBlocked(e.name))) {
+            queue[i].markFailed();
+            queue.splice(i, 1);
+          }
+        }
         const othersActive = engines.some(
           (e) => e.name !== eng.name && e.busy,
         );

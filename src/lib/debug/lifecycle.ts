@@ -51,6 +51,9 @@ export function initDebug(): void {
   if (_inited) return;
   _inited = true;
 
+  // 同步订阅，确保不会错过 initDebug() 与 storage 异步读取之间的事件
+  startCollecting();
+
   browser.storage.onChanged.addListener((changes) => {
     if (changes.debugEnabled) {
       dbgState.enabled = !!changes.debugEnabled.newValue;
@@ -67,8 +70,9 @@ export function initDebug(): void {
   browser.storage.local.get("debugEnabled").then(({ debugEnabled }) => {
     dbgState.enabled = !!debugEnabled;
     if (dbgState.enabled) {
-      startCollecting();
       mount();
+    } else {
+      stopCollecting();
     }
   });
 }
