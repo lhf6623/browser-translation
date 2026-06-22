@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { dbgState } from "./index";
+import { dbgState } from "./state";
 
 const collapsed = ref(false);
 
-const engineKeys = ["MM", "GT", "BD", "YD", "TX"] as const;
+const engineKeys = Object.keys(dbgState.engines);
 
 function statusIcon(s: string): string {
   switch (s) {

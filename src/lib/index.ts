@@ -8,7 +8,7 @@ export * from "./scanner";
 export * from "./translator";
 export { QtElement } from "./qtelement";
 export { removeAll } from "./cleanup";
-export { dbgState, dbgLog, initDebug } from "./debug";
+export { dbgState, initDebug } from "./debug";
 export * from "./engines/types";
 export * from "./engines/registry";
 export * from "./engines/pool";

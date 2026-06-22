@@ -4,12 +4,12 @@ import { browser } from "wxt/browser";
 import type { EngineState } from "./engines/types";
 import { getEngineDef } from "./engines/registry";
 import { executeEngine } from "./engines/executor";
-import { engines, pickReady } from "./engines/pool";
+import { engines } from "./engines/pool";
 import { state } from "./state";
 import { MAX_TEXT_LEN } from "./constants";
 import { sleep, cleanHtml } from "./utils";
 import { memCache, hashKey } from "./utils/cache";
-import { dbgLog } from "./debug";
+import { bus } from "./utils/events";
 import { QtElement } from "./qtelement";
 
 // ---- 文本 API 调用 ----
@@ -31,7 +31,7 @@ async function translateTexts(
 
     if (memCache.has(key)) {
       results[i] = memCache.get(key)!;
-      dbgLog("", text, 'cache');
+      bus.emit('translate', { engine: '', text, status: 'cache' });
       continue;
     }
 
@@ -40,7 +40,7 @@ async function translateTexts(
     if (cached) {
       memCache.set(key, cached);
       results[i] = cached;
-      dbgLog("", text, 'cache');
+      bus.emit('translate', { engine: '', text, status: 'cache' });
       continue;
     }
 
@@ -76,9 +76,9 @@ async function translateTexts(
         const key = hashKey(uncached[j].text);
         memCache.set(key, cleaned);
         browser.storage.local.set({ [key]: cleaned }).catch(() => {});
-        dbgLog(engineObj.name, uncached[j].text);
+        bus.emit('translate', { engine: engineObj.name, text: uncached[j].text, status: '' });
       } else {
-        dbgLog(engineObj.name, uncached[j].text, 'fail');
+        bus.emit('translate', { engine: engineObj.name, text: uncached[j].text, status: 'fail' });
       }
     }
   }
@@ -191,16 +191,16 @@ async function tryTranslateBatch(
           if (span) {
             state.translatedEls.push(span);
           } else {
-            dbgLog(eng.name, t.core, 'fail');
+            bus.emit('translate', { engine: eng.name, text: t.core, status: 'fail' });
           }
         } else {
-          dbgLog(eng.name, t.core, 'fail');
+          bus.emit('translate', { engine: eng.name, text: t.core, status: 'fail' });
           t.qel.addBlock(eng.name);
           if (engines.every((e) => t.qel.isBlocked(e.name))) t.qel.markFailed();
           else queue.push(t.qel);
         }
       } else {
-        dbgLog(eng.name, t.core, 'fail');
+        bus.emit('translate', { engine: eng.name, text: t.core, status: 'fail' });
         t.qel.addBlock(eng.name);
         if (engines.every((e) => t.qel.isBlocked(e.name))) t.qel.markFailed();
         else queue.push(t.qel);
@@ -219,25 +219,30 @@ async function tryTranslateBatch(
 // ---- 引擎调度 ----
 
 /**
- * 引擎翻译 worker：循环从队列取元素，每批按引擎 maxBatchSize 决定取量。
- * 遵守 delayMs 间隔，限流或队列空时退出。
+ * 引擎自治 worker：循环从队列取元素，完成一批立刻检查下一批。
+ * 遵守 delayMs 间隔，限流自愈，无同步屏障。
  */
-async function translateWorker(
+async function autoWorker(
   eng: EngineState,
   queue: QtElement[],
   gen: number,
-): Promise<boolean> {
+): Promise<void> {
   eng.busy = true;
-  let processedAny = false;
-  const def = getEngineDef(eng.name);
   try {
-    while (queue.length && !state.cancelled && state.generation === gen) {
+    while (true) {
+      if (state.cancelled || state.generation !== gen) return;
+      if (!queue.length) return;
+
       const wait = eng.delayMs - (Date.now() - eng.lastCall);
       if (wait > 0) await sleep(wait);
-      if (state.cancelled || state.generation !== gen) break;
-      if (eng.rateLimitUntil > Date.now()) break;
+      if (state.cancelled || state.generation !== gen) return;
 
-      // 从队列收集未被本引擎拉黑的元素，取量由引擎 maxBatchSize 决定
+      if (eng.rateLimitUntil > Date.now()) {
+        await sleep(1000);
+        continue;
+      }
+
+      const def = getEngineDef(eng.name);
       const batchLimit = def.maxBatchSize([]);
       const batch: QtElement[] = [];
       for (let i = queue.length - 1; i >= 0 && batch.length < batchLimit; i--) {
@@ -245,46 +250,40 @@ async function translateWorker(
           batch.push(queue.splice(i, 1)[0]);
         }
       }
-      if (batch.length === 0) break;
+
+      if (batch.length === 0) {
+        const othersActive = engines.some(
+          (e) => e.name !== eng.name && e.busy,
+        );
+        if (!othersActive) return;
+        await sleep(200);
+        continue;
+      }
 
       eng.lastCall = Date.now();
       await tryTranslateBatch(batch, eng, queue, gen);
-      processedAny = true;
     }
   } finally {
     eng.busy = false;
   }
-  return processedAny;
 }
 
 // ---- 入口 ----
 
 /**
- * 批量翻译入口：收集空闲引擎并发执行。
+ * 批量翻译入口：启动全部引擎自治并发执行。
+ * 无同步屏障 — 各引擎独立循环消费队列，完成一批立刻取下一批。
  * 失败项推回队列由其他引擎重试，全部引擎拉黑后自动放弃。
  */
 export async function doBlocks(blocks: HTMLElement[]): Promise<void> {
   const gen = state.generation;
   const queue: QtElement[] = blocks.map((el) => new QtElement(el));
-  let waitStart = 0;
 
-  while (queue.length && !state.cancelled && state.generation === gen) {
-    const now = Date.now();
-    const ready = pickReady();
+  const workers = engines.map((eng) => autoWorker(eng, queue, gen));
+  await Promise.allSettled(workers);
 
-    if (!ready.length) {
-      if (!waitStart) waitStart = now;
-      if (now - waitStart > 30000) {
-        console.warn("[快捷翻译] 所有引擎暂不可用");
-        break;
-      }
-      await sleep(100);
-      continue;
-    }
-    waitStart = 0;
-
-    const workers = ready.map((eng) => translateWorker(eng, queue, gen));
-    const results = await Promise.all(workers);
-    if (!results.some(Boolean) && queue.length > 0) break;
+  // 全部 worker 退出后残留元素 = 被所有引擎拉黑 → 标记失败
+  if (queue.length && !state.cancelled && state.generation === gen) {
+    for (const qel of queue) qel.markFailed();
   }
 }
