@@ -58,28 +58,65 @@ export default defineContentScript({
       }
     }
 
-    // 滚动 / 缩放事件防抖，翻译中则重试等待
+    const scrollTimer = { current: null as ReturnType<typeof setTimeout> | null };
+    const resizeTimer = { current: null as ReturnType<typeof setTimeout> | null };
+    const interactionTimer = { current: null as ReturnType<typeof setTimeout> | null };
+
+    let _debounceStart = 0;
+    const DEBOUNCE_MAX = 2000;
+
+    function clearTimers() {
+      if (scrollTimer.current) {
+        clearTimeout(scrollTimer.current);
+        scrollTimer.current = null;
+      }
+      if (resizeTimer.current) {
+        clearTimeout(resizeTimer.current);
+        resizeTimer.current = null;
+      }
+      if (interactionTimer.current) {
+        clearTimeout(interactionTimer.current);
+        interactionTimer.current = null;
+      }
+    }
+
+    // 滚动 / 缩放事件防抖（300ms），但持续滚动超过 2s 强制执行
     function scheduleScan(timerRef: {
       current: ReturnType<typeof setTimeout> | null;
     }): void {
       if (Date.now() - state.translatedAt < 1000) return;
+
+      if (!_debounceStart) _debounceStart = Date.now();
+
+      // 持续滚动超过 2s 上限，不管还在不在滚都触发
+      if (Date.now() - _debounceStart >= DEBOUNCE_MAX) {
+        clearTimers();
+        _debounceStart = 0;
+        if (!S.translating()) scanAndTranslate();
+        return;
+      }
+
       if (timerRef.current) clearTimeout(timerRef.current);
       const tryScan = () => {
         if (S.translating()) {
           timerRef.current = setTimeout(tryScan, 200);
           return;
         }
+        _debounceStart = 0;
         scanAndTranslate();
       };
       timerRef.current = setTimeout(tryScan, 300);
     }
 
-    const scrollTimer = { current: null as ReturnType<typeof setTimeout> | null };
-    const resizeTimer = { current: null as ReturnType<typeof setTimeout> | null };
-
     window.addEventListener("resize", () => scheduleScan(resizeTimer));
     // capture: true 捕获页面内任意元素的滚动（scroll 事件不冒泡）
     document.addEventListener("scroll", () => scheduleScan(scrollTimer), { passive: true, capture: true });
+
+    // 用户交互后补扫：菜单弹出、Tab 切换、Accordion 展开等 CSS 驱动的可见性变化
+    // scroll/resize 无法感知，但一定伴随用户的交互操作
+    document.addEventListener("click", () => scheduleScan(interactionTimer), { capture: true });
+    document.addEventListener("mouseover", () => scheduleScan(interactionTimer), { capture: true, passive: true });
+    document.addEventListener("focusin", () => scheduleScan(interactionTimer), { capture: true });
 
     // ==========================================
     // 消息：快捷键切换 / 清缓存

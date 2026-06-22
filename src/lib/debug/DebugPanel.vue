@@ -16,8 +16,7 @@ function statusIcon(s: string): string {
 }
 
 function statusColor(s: string): string {
-  const status = s || "ok";
-  switch (status) {
+  switch (s) {
     case "ok": return "qt-text-ok";
     case "fail": return "qt-text-fail";
     case "cache": return "qt-text-accent";

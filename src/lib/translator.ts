@@ -76,7 +76,7 @@ async function translateTexts(
         const key = hashKey(uncached[j].text);
         memCache.set(key, cleaned);
         browser.storage.local.set({ [key]: cleaned }).catch(() => {});
-        bus.emit('translate', { engine: engineObj.name, text: uncached[j].text, status: '' });
+        bus.emit('translate', { engine: engineObj.name, text: uncached[j].text, status: 'ok' });
       } else {
         bus.emit('translate', { engine: engineObj.name, text: uncached[j].text, status: 'fail' });
       }
