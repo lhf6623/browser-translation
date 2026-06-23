@@ -103,7 +103,7 @@ async function clearCache() {
   </div>
 
   <!-- footer -->
-  <div class="qt-py-2.5 qt-px-5 qt-flex qt-justify-between qt-gap-2">
+  <div class="qt-pb-2.5 qt-px-5 qt-flex qt-justify-between qt-gap-2">
     <a
       href="#"
       class="qt-inline-flex qt-items-center qt-gap-1 qt-text-[11px] qt-font-medium qt-text-brand qt-no-underline qt-py-1.5 qt-px-3 qt-rounded-[16px] qt-bg-brand/6 hover:qt-bg-brand/12 qt-transition-all qt-duration-200"
