@@ -74,7 +74,7 @@ src/
 │   │   └── DebugPanel.vue  # UI 组件
 │   └── engines/            # 翻译引擎
 │       ├── types.ts        # 类型定义（EngineDef / EngineState / EngineResult）
-│       ├── pool.ts         # 引擎调度池（engines[] + pickEngine + pickReady）
+│       ├── pool.ts         # 引擎调度池（engines[] 引擎状态池 + pickReady）
 │       ├── executor.ts     # 统一执行层：sendMessage → background → parseResponse
 │       ├── registry.ts     # 引擎注册表（名字 → 定义映射）
 │       ├── google.ts       # Google Translate
@@ -94,10 +94,10 @@ src/
   ▼
 translatePage() → findBlocks() → doBlocks()
                     │               │
-                    │ 全量 DOM 扫描   │ pickReady() → 多引擎并发
+                    │ 全量 DOM 扫描   │ autoWorker × 5 → 多引擎并发
                     │ 跳过已翻译/失败   │
                     ▼               ▼
-               inView 过滤      translateWorker × N
+               inView 过滤      autoWorker × 5
                视口内入队          │
                                  ├── 内存缓存 (LRU Map, 上限 1000)
                                  ├── 持久缓存 (chrome.storage)
@@ -157,7 +157,7 @@ data-qt="1"        → 翻译成功，显示译文
 data-qt-failed="1" → 全部引擎失败，静默放弃
 ```
 
-切换翻译开关时 `QtElement.removeAll()` 移除所有译文 DOM 并清除全部属性，重新开始。
+切换翻译开关时调用 `removeAll()`（cleanup.ts），移除所有译文 DOM 并调用 `QtElement.cleanupAll()` 清除全部属性，重新开始。
 
 ## 引擎定义
 
@@ -167,7 +167,7 @@ data-qt-failed="1" → 全部引擎失败，静默放弃
 export const googleDef: EngineDef = {
   name: "GT",
 
-  buildPayload: (text) => ({           // 拼请求参数
+  buildPayload: (texts) => ({          // 拼请求参数（接收 string[]，Google 只取第一条）
     url: `https://translate.googleapis.com/translate_a/single?...`,
   }),
 
@@ -179,6 +179,8 @@ export const googleDef: EngineDef = {
   isRateLimited: (_data, status) => {  // 判断限流（HTTP status + response body）
     return status === 403 || status === 429;
   },
+
+  maxBatchSize: () => 1,               // Google 免费端点不支持批量，每次只翻译一条
 };
 ```
 
@@ -188,20 +190,20 @@ export const googleDef: EngineDef = {
 
 ## 引擎调度
 
-- **多引擎并发**：`pickReady()` 筛选所有空闲（不 busy、未限流、已过间隔）引擎，`Promise.all` 并发启动 worker
-- **独立请求间隔**：每个引擎独立 `delayMs`，避免同时打爆 API
+- **多引擎并发**：全部 5 个引擎同时启动自治 `autoWorker`，各引擎独立循环消费队列。完成一批立刻取下一批，无同步屏障
+- **独立请求间隔**：每个 engine 独立 `delayMs`，`autoWorker` 在取下一批前等待间隔，避免同时打爆 API
 
 | 引擎 | delayMs | 说明 |
 | ------ | ------ | ------ |
 | MM (MyMemory) | 100 | 免费，不限流 |
 | GT (Google) | 500 | |
-| BD (百度) | 1000 | |
-| YD (有道) | 200 | |
+| BD (百度) | 110 | |
+| YD (有道) | 600 | |
 | TX (腾讯) | 200 | |
 
-- **限流检测**：HTTP 状态码（429/403）+ 响应体错误码双重判断。部分 API（有道）即使是限流也返回 HTTP 200，仅通过 body errorCode 表达（YD 411、BD 54003、TX LimitExceeded）→ 冷却 60s，避免无效重试
+- **限流检测**：HTTP 状态码（429/403）+ 响应体错误码双重判断。部分 API（有道）即使是限流也返回 HTTP 200，仅通过 body errorCode 表达（YD 411、BD 54003、TX LimitExceeded / RequestLimitExceeded）→ 冷却 60s，避免无效重试
 - **API 超时保护**：background proxy 与 executor 双重 8s 超时保护，超时视为失败
-- **超长文本**：>3000 字符按句子拆分，同引擎逐个翻译再拼接
+
 
 ## 翻译失败处理
 
@@ -227,8 +229,6 @@ export const googleDef: EngineDef = {
 
 | 参数 | 值 | 说明 |
 | ------ | --- | ------ |
-| `MAX_TEXT_LEN` | 3000 | 单次翻译上限，超长按句子拆分 |
-| `MIN_TEXT_LEN` | 1 | 文本块最小字符数 |
 | `VIEWPORT_MARGIN` | 300 | 视口扩展边距（px），提前翻译即将可见内容 |
 | `API_TIMEOUT_MS` | 8000 | 单次 API 请求超时（ms） |
 

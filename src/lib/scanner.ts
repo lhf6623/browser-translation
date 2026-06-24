@@ -1,6 +1,6 @@
 // ========== DOM 文本块扫描 ==========
 
-import { SKIP_TAGS, SCAN_UNIT_TAGS, MIN_TEXT_LEN, CSS } from "./constants";
+import { SKIP_TAGS, SCAN_UNIT_TAGS, CSS } from "./constants";
 import { QtElement } from "./qtelement";
 import { hasDirect, directText, visible } from "./utils/dom";
 
@@ -27,7 +27,7 @@ export function findBlocks(): HTMLElement[] {
 
     if (SCAN_UNIT_TAGS.has(node.tagName)) {
       const t = node.textContent?.trim() || "";
-      if ([...t].length >= MIN_TEXT_LEN && visible(node)) {
+      if (t.length > 0 && visible(node)) {
         blocks.push(node as HTMLElement);
         seen.add(node);
       }
@@ -36,7 +36,7 @@ export function findBlocks(): HTMLElement[] {
 
     if (hasDirect(node) && !hasBlockKids(node) && visible(node)) {
       const t = directText(node).trim();
-      if ([...t].length >= MIN_TEXT_LEN) {
+      if (t.length > 0) {
         blocks.push(node as HTMLElement);
         seen.add(node);
         continue;

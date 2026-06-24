@@ -6,7 +6,6 @@ import { getEngineDef } from "./engines/registry";
 import { executeEngine } from "./engines/executor";
 import { engines } from "./engines/pool";
 import { state } from "./state";
-import { MAX_TEXT_LEN } from "./constants";
 import { sleep, cleanHtml } from "./utils";
 import { memCache, hashKey } from "./utils/cache";
 import { bus } from "./utils/events";
@@ -140,34 +139,14 @@ async function tryTranslateBatch(
     }
   }
 
-  // 2. 长文本拆句 → 收集所有句子段（跨元素扁平化）
-  type Seg = { taskIdx: number; text: string };
-  const segs: Seg[] = [];
-  const taskSegInfo: { segStart: number; segCount: number }[] = [];
-
-  for (let i = 0; i < tasks.length; i++) {
-    const core = tasks[i].core;
-    const start = segs.length;
-    if (core.length <= MAX_TEXT_LEN) {
-      segs.push({ taskIdx: i, text: core });
-      taskSegInfo.push({ segStart: start, segCount: 1 });
-    } else {
-      const sentences = core.match(/[^.!?\n]+[.!?\n]*/g) || [core];
-      for (const s of sentences) {
-        segs.push({ taskIdx: i, text: s.trim() });
-      }
-      taskSegInfo.push({ segStart: start, segCount: sentences.length });
-    }
-  }
-
-  // 3. 显示 loader
+  // 2. 显示 loader
   for (const t of tasks) t.qel.showLoader();
 
-  // 4. 批量 API 调用（失败则整批拉黑）
-  let segResults: (string | null)[];
+  // 3. 批量 API 调用（失败则整批拉黑）
+  let results: (string | null)[];
   try {
-    const segTexts = segs.map((s) => s.text);
-    segResults = await translateTexts(segTexts, eng);
+    const texts = tasks.map((t) => t.core);
+    results = await translateTexts(texts, eng);
   } catch (err) {
     console.warn("[快捷翻译] 批量 API 调用异常:", err);
     for (const t of tasks) {
@@ -185,26 +164,17 @@ async function tryTranslateBatch(
     return;
   }
 
-  // 5-6. 逐元素处理（各自独立，一个失败不影响同批其他元素）
+  // 4-5. 逐元素处理（各自独立，一个失败不影响同批其他元素）
   for (let i = 0; i < tasks.length; i++) {
     const t = tasks[i];
     try {
-      const { segStart, segCount } = taskSegInfo[i];
-      const taskSegResults = segResults.slice(segStart, segStart + segCount);
-      if (taskSegResults.every((r) => r !== null)) {
-        const result = taskSegResults.join(" ");
-        if (result) {
-          const span = t.qel.insertTranslation(t.prefix + result + t.suffix);
-          if (span) {
-            state.translatedEls.push(span);
-          } else {
-            bus.emit('translate', { engine: eng.name, text: t.core, status: 'fail' });
-          }
+      const translation = results[i];
+      if (translation) {
+        const span = t.qel.insertTranslation(t.prefix + translation + t.suffix);
+        if (span) {
+          state.translatedEls.push(span);
         } else {
           bus.emit('translate', { engine: eng.name, text: t.core, status: 'fail' });
-          t.qel.addBlock(eng.name);
-          if (engines.every((e) => t.qel.isBlocked(e.name))) t.qel.markFailed();
-          else queue.push(t.qel);
         }
       } else {
         bus.emit('translate', { engine: eng.name, text: t.core, status: 'fail' });
